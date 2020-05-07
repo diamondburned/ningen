@@ -46,16 +46,11 @@ func (b blockquote) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node
 		node := ast.NewBlockquote()
 
 		// Try and parse the block as a paragraph:
-		para, state := _paragraph.Open(node, r, pc)
-
-		// If there's no paragraph, make a blank one:
-		if para == nil {
-			para = ast.NewParagraph()
-		}
+		para := newSingleParagraph(node, r, pc)
 
 		// Add and return the paragraph anyway, maybe the first line is just empty.
 		node.AppendChild(node, para)
-		return node, state
+		return node, parser.NoChildren
 	}
 
 	return nil, parser.NoChildren
@@ -63,10 +58,12 @@ func (b blockquote) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node
 
 func (b blockquote) Continue(node ast.Node, r text.Reader, pc parser.Context) parser.State {
 	if b.process(r) {
-		para := node.FirstChild().(*ast.Paragraph)
-		return _paragraph.Continue(para, r, pc)
+		para := newSingleParagraph(node, r, pc)
+		node.AppendChild(node, para)
+		return parser.Continue
 	}
 
+	// TODO: update on this bug
 	// TODO: bug
 	// This would not render:
 	//
@@ -84,18 +81,38 @@ func (b blockquote) Continue(node ast.Node, r text.Reader, pc parser.Context) pa
 }
 
 func (b blockquote) Close(node ast.Node, r text.Reader, pc parser.Context) {
-	para, ok := node.FirstChild().(*ast.Paragraph)
+	// Get the last paragraph.
+	para, ok := node.LastChild().(*ast.Paragraph)
 	if !ok { // if not a paragraph:
 		return
 	}
 
+	// Remove it if the paragraph is empty.
 	lines := para.Lines()
+	length := lines.Len()
 
-	if length := lines.Len(); length > 0 {
-		// Trim last whitespace
-		last := lines.At(length - 1)
-		lines.Set(length-1, last.TrimRightSpace(r.Source()))
+	// Remove.
+	if length == 0 {
+		node.RemoveChild(node, para)
 	}
+	if line := lines.At(0); line.Len() == 0 {
+		node.RemoveChild(node, para)
+	}
+}
+
+func newSingleParagraph(node ast.Node, r text.Reader, pc parser.Context) ast.Node {
+	// Try and parse the block as a paragraph:
+	para, _ := _paragraph.Open(node, r, pc)
+
+	// If there's no paragraph, make a blank one:
+	if para == nil {
+		para = ast.NewParagraph()
+	}
+
+	// Close the paragraph now, since we'll be making new ones.
+	_paragraph.Close(para, r, pc)
+
+	return para
 }
 
 func (b blockquote) CanInterruptParagraph() bool {

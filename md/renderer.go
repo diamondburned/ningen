@@ -28,7 +28,23 @@ func (r *BasicRenderer) walker(w io.Writer, source []byte, n ast.Node, enter boo
 	case *ast.Document:
 		// noop
 	case *ast.Blockquote:
-		write(w, "---\n")
+		if enter {
+			// A blockquote contains a paragraph each line. Because Discord.
+			for child := n.FirstChild(); child != nil; child = child.NextSibling() {
+				write(w, "> ")
+				ast.Walk(child, func(node ast.Node, enter bool) (ast.WalkStatus, error) {
+					// We only call when entering, since we don't want to trigger a
+					// hard new line after each paragraph.
+					if enter {
+						return r.walker(w, source, node, enter), nil
+					}
+					return ast.WalkContinue, nil
+				})
+			}
+		}
+		// We've already walked over children ourselves.
+		return ast.WalkSkipChildren
+
 	case *ast.Paragraph:
 		if !enter {
 			write(w, "\n")

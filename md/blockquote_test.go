@@ -25,8 +25,11 @@ dadadasd
 asdsad</p>
 <blockquote>
 <p>be me
-discord markdown <strong>bad</strong>
-suffer</p>
+</p>
+<p>discord markdown <strong>bad</strong>
+</p>
+<p>suffer
+</p>
 </blockquote>
 <p>discord sucks.</p>
 `
