@@ -13,7 +13,6 @@ var fencedCodeBlockInfoKey = parser.NewContextKey()
 
 type fenced struct{}
 type fenceData struct {
-	indent int
 	length int
 	node   ast.Node
 }
@@ -40,19 +39,12 @@ func (b fenced) Parse(p ast.Node, r text.Reader, pc parser.Context) ast.Node {
 
 func (b fenced) _open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, parser.State) {
 	line, segment := r.PeekLine()
-	pos := pc.BlockOffset()
 
-	if pos < 0 || (line[pos] != '`') {
-		return nil, parser.NoChildren
-	}
-
-	findent := pos
-	i := pos
-
+	i := 0
 	for ; i < len(line) && line[i] == '`'; i++ {
 	}
 
-	oFenceLength := i - pos
+	oFenceLength := i
 
 	// If there are less than 3 backticks:
 	if oFenceLength < 3 {
@@ -83,7 +75,7 @@ func (b fenced) _open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, p
 		}
 	}
 
-	pc.Set(fencedCodeBlockInfoKey, &fenceData{findent, oFenceLength, node})
+	pc.Set(fencedCodeBlockInfoKey, &fenceData{oFenceLength, node})
 	return node, parser.NoChildren
 }
 
@@ -102,7 +94,7 @@ func (b fenced) _continue(node ast.Node, r text.Reader, pc parser.Context) parse
 	}
 
 	// Is there a string literal? Write it.
-	pos, padding := util.DedentPositionPadding(line, r.LineOffset(), segment.Padding, fdata.indent)
+	pos, padding := util.DedentPositionPadding(line, r.LineOffset(), segment.Padding, 0)
 
 	// start+i accounts for everything before end (```)
 	var start, stop = segment.Start + pos, segment.Start + i

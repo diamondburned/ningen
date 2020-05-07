@@ -6,17 +6,19 @@ import (
 	"testing"
 )
 
-const message = `**this is a test.** https://google.com strictly URL. 
+const message = `**this is a test.** https://google.com strictly URL.
 > be me
 > wacky **blockquote**
 > fml
 > >>> bruh
-` + "```" + `package main
+` + "```" + `go
+package main
 
 func main() {
 	fmt.Println("Bruh moment.")
 }
-` + "```"
+` + "```" + `
+`
 
 func TestRenderer(t *testing.T) {
 	node := Parse([]byte(message))
