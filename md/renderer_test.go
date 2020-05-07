@@ -11,8 +11,7 @@ const message = `**this is a test.** https://google.com strictly URL.
 > wacky **blockquote**
 > fml
 > >>> bruh
-` + "```go" + `
-package main
+` + "```" + `package main
 
 func main() {
 	fmt.Println("Bruh moment.")

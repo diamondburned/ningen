@@ -67,21 +67,18 @@ func (b fenced) _open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, p
 	// If this isn't the last thing in the line: (```<language>)
 	if i < len(line)-1 {
 		rest := line[i:]
+		infoStart, infoStop := segment.Start-segment.Padding+i, segment.Stop
 
-		// If not white-space?
-		if len(rest) > 0 {
-			infoStart, infoStop := segment.Start-segment.Padding+i, segment.Stop
-			if infoStart < infoStop && bytes.IndexByte(rest, '\n') > -1 {
-				// Account for the trailing whitespaces:
-				left := util.TrimLeftSpaceLength(rest)
-				right := util.TrimRightSpaceLength(rest)
-				// If value does not contain spaces, it's probably the language
-				// part.
-				if left < right {
-					seg := text.NewSegment(infoStart+left, infoStop-right)
-					node.Info = ast.NewTextSegment(seg)
-					r.Advance(infoStop - infoStart)
-				}
+		if len(rest) > 0 && infoStart < infoStop && bytes.IndexByte(rest, '\n') > -1 {
+			// Trim trailing whitespaces:
+			left := util.TrimLeftSpaceLength(rest)
+			right := util.TrimRightSpaceLength(rest)
+
+			// If there is no space:
+			if left < right && bytes.IndexByte(rest, ' ') == -1 {
+				seg := text.NewSegment(infoStart+left, infoStop-right)
+				node.Info = ast.NewTextSegment(seg)
+				r.Advance(infoStop - infoStart)
 			}
 		}
 	}
