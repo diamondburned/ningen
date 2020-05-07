@@ -79,6 +79,8 @@ func (r *BasicRenderer) walker(w io.Writer, source []byte, n ast.Node, enter boo
 				write(w, "#"+n.Channel.Name)
 			case n.GuildUser != nil:
 				write(w, "@"+n.GuildUser.Username)
+			case n.GuildRole != nil:
+				write(w, "@"+n.GuildRole.Name)
 			}
 		}
 	case *ast.String:

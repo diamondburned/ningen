@@ -16,6 +16,7 @@ type Mention struct {
 	// both could be nil
 	Channel   *discord.Channel
 	GuildUser *discord.GuildUser
+	GuildRole *discord.Role // might not have anything else but ID
 }
 
 var KindMention = ast.NewNodeKind("Mention")
@@ -71,7 +72,10 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 	case "#": // channel
 		c, err := state.Channel(d)
 		if err != nil {
-			return nil
+			c = &discord.Channel{
+				ID:   d,
+				Name: d.String(),
+			}
 		}
 
 		return &Mention{
@@ -88,22 +92,9 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 			}
 		}
 
-		// If we can't find the mention, then it's likely the message was
-		// fetched from the API, which wouldn't have these fields.
+		// Don't try, the user is probably not mentioned.
 		if target == nil {
-			target = searchMember(state, msg.GuildID, d)
-		}
-
-		if target == nil {
-			// Don't try.
 			return nil
-		}
-
-		if msg.GuildID.Valid() && target.Member == nil {
-			m, err := state.Member(msg.GuildID, d)
-			if err == nil {
-				target.Member = m
-			}
 		}
 
 		return &Mention{
@@ -112,8 +103,30 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 		}
 
 	case "@&": // role
-		// TODO
-		return nil
+		var target discord.Snowflake
+		for _, id := range msg.MentionRoleIDs {
+			if id == d {
+				target = id
+				break
+			}
+		}
+		if !target.Valid() {
+			return nil
+		}
+
+		r, err := state.Role(msg.GuildID, d)
+		if err != nil {
+			// Allow fallback.
+			r = &discord.Role{
+				ID:   d,
+				Name: d.String(),
+			}
+		}
+
+		return &Mention{
+			BaseInline: ast.BaseInline{},
+			GuildRole:  r,
+		}
 	}
 
 	return nil

@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
+
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/text"
 )
 
 const message = `**this is a test.** https://google.com strictly URL.
@@ -18,10 +21,16 @@ func main() {
 	fmt.Println("Bruh moment.")
 }
 ` + "```" + `
+[test](https://google.com)
 `
 
 func TestRenderer(t *testing.T) {
-	node := Parse([]byte(message))
+	p := parser.NewParser(
+		parser.WithBlockParsers(BlockParsers()...),
+		parser.WithInlineParsers(InlineParserWithLink()...),
+	)
+
+	node := p.Parse(text.NewReader([]byte(message)))
 	buff := bytes.Buffer{}
 	DefaultRenderer.Render(&buff, []byte(message), node)
 
