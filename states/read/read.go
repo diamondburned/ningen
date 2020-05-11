@@ -11,7 +11,7 @@ import (
 	"github.com/diamondburned/ningen/handler"
 )
 
-type OnChange = func(rs *State, ch gateway.ReadState, unread bool)
+type OnChange = func(ch gateway.ReadState, unread bool)
 
 type State struct {
 	mutex  sync.Mutex
@@ -113,7 +113,7 @@ func (r *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 
 	// Announce that there is a change.
 	for _, fn := range r.onChanges {
-		fn(r, rscp, unread)
+		fn(rscp, unread)
 	}
 }
 
@@ -141,7 +141,7 @@ func (r *State) MarkRead(chID, msgID discord.Snowflake) {
 	// Announce.
 	rscp := *rs
 	for _, fn := range r.onChanges {
-		fn(r, rscp, false)
+		fn(rscp, false)
 	}
 
 	// Send out Ack in the background.
