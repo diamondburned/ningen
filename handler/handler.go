@@ -21,9 +21,10 @@ func NewRepository(adder AddHandler) *Repository {
 	}
 }
 
-func (r *Repository) AddHandler(fn interface{}) {
-	cancel := r.adder.AddHandler(fn)
+func (r *Repository) AddHandler(fn interface{}) (cancel func()) {
+	cancel = r.adder.AddHandler(fn)
 	r.cancel = append(r.cancel, cancel)
+	return
 }
 
 func (r *Repository) Unbind() {
