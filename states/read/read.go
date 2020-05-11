@@ -14,8 +14,8 @@ import (
 type OnChange = func(rs *State, ch gateway.ReadState, unread bool)
 
 type State struct {
+	State  *state.State
 	mutex  sync.Mutex
-	state  *state.State
 	states map[discord.Snowflake]*gateway.ReadState
 
 	selfID    discord.Snowflake
@@ -26,7 +26,7 @@ type State struct {
 }
 
 func NewState(state *state.State, r handler.AddHandler) *State {
-	readstate := &State{state: state}
+	readstate := &State{State: state}
 
 	u, err := state.Me()
 	if err != nil {
@@ -149,7 +149,7 @@ func (r *State) MarkRead(chID, msgID discord.Snowflake) {
 }
 
 func (r *State) ack(chID, msgID discord.Snowflake) {
-	m, err := r.state.Store.Message(chID, msgID)
+	m, err := r.State.Store.Message(chID, msgID)
 	if err != nil {
 		return
 	}
@@ -162,5 +162,5 @@ func (r *State) ack(chID, msgID discord.Snowflake) {
 	defer r.ackMutex.Unlock()
 
 	// Send over Ack.
-	r.state.Ack(chID, msgID, &r.lastAck)
+	r.State.Ack(chID, msgID, &r.lastAck)
 }

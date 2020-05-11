@@ -13,14 +13,14 @@ import (
 
 // State implements a queryable channel and guild mute state.
 type State struct {
+	Store    state.Store
 	mutex    sync.RWMutex
-	store    state.Store
 	settings []gateway.UserGuildSettings
 	chMutes  map[discord.Snowflake]*gateway.SettingsChannelOverride // cache
 }
 
 func NewState(store state.Store, r handler.AddHandler) *State {
-	mutestate := &State{store: store}
+	mutestate := &State{Store: store}
 
 	r.AddHandler(func(r *gateway.ReadyEvent) {
 		mutestate.mutex.Lock()
@@ -51,7 +51,7 @@ func NewState(store state.Store, r handler.AddHandler) *State {
 
 // CategoryMuted returns whether or not the channel's category is muted.
 func (m *State) Category(channelID discord.Snowflake) bool {
-	c, err := m.store.Channel(channelID)
+	c, err := m.Store.Channel(channelID)
 	if err != nil || !c.CategoryID.Valid() {
 		return false
 	}
