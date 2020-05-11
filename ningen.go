@@ -8,6 +8,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/ningen/states/emoji"
 	"github.com/diamondburned/ningen/states/mute"
 	"github.com/diamondburned/ningen/states/read"
 )
@@ -16,6 +17,7 @@ type State struct {
 	*state.State
 	Read  *read.State
 	Muted *mute.State
+	Emoji *emoji.State
 }
 
 func FromState(s *state.State) (*State, error) {
@@ -23,6 +25,7 @@ func FromState(s *state.State) (*State, error) {
 		State: s,
 		Read:  read.NewState(s, s),
 		Muted: mute.NewState(s, s),
+		Emoji: emoji.NewState(s),
 	}
 
 	s.AddHandler(func(r *gateway.SessionsReplaceEvent) {
