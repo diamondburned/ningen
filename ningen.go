@@ -28,6 +28,9 @@ func FromState(s *state.State) (*State, error) {
 		Emoji: emoji.NewState(s),
 	}
 
+	// Users can override later.
+	s.Handler.Synchronous = false
+
 	s.AddHandler(func(r *gateway.SessionsReplaceEvent) {
 		if u, _ := s.Me(); u != nil {
 			s.PresenceSet(0, joinSession(*u, r))
