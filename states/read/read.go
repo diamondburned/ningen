@@ -94,12 +94,12 @@ func (r *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 
 	rs.MentionCount += mentions
 
-	if ch, _ := r.state.Store.Channel(chID); ch != nil {
+	if ch, _ := r.State.Store.Channel(chID); ch != nil {
 		ch.LastMessageID = msgID
-		r.state.ChannelSet(ch)
+		r.State.ChannelSet(ch)
 	}
 
-	if msg, _ := r.state.Store.Message(chID, msgID); msg != nil {
+	if msg, _ := r.State.Store.Message(chID, msgID); msg != nil {
 		if msg.Author.ID == r.selfID {
 			// If the message is ours, we should marrk it as already read, since
 			// it is registered like that on the Discord servers.
