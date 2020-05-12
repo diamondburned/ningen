@@ -69,17 +69,20 @@ func (m *State) Channel(channelID discord.Snowflake) bool {
 
 func (m *State) ChannelOverrides(channelID discord.Snowflake) *gateway.SettingsChannelOverride {
 	m.mutex.RLock()
-	defer m.mutex.RUnlock()
-
-	if m, ok := m.chMutes[channelID]; ok {
-		return m
+	if mute, ok := m.chMutes[channelID]; ok {
+		m.mutex.RUnlock()
+		return mute
 	}
+	m.mutex.RUnlock()
 
 	for i, guild := range m.settings {
 		for j, ch := range guild.ChannelOverrides {
 			if ch.ChannelID == channelID {
 				// cache
+				m.mutex.Lock()
 				m.chMutes[channelID] = &m.settings[i].ChannelOverrides[j]
+				m.mutex.Unlock()
+
 				return &ch
 			}
 		}
