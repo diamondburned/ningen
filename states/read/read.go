@@ -26,7 +26,10 @@ type State struct {
 }
 
 func NewState(state *state.State, r handler.AddHandler) *State {
-	readstate := &State{state: state}
+	readstate := &State{
+		state:  state,
+		states: make(map[discord.Snowflake]*gateway.ReadState),
+	}
 
 	u, err := state.Me()
 	if err != nil {
