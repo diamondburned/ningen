@@ -94,6 +94,7 @@ func (b blockquote) Close(node ast.Node, r text.Reader, pc parser.Context) {
 	// Remove.
 	if length == 0 {
 		node.RemoveChild(node, para)
+		return
 	}
 	if line := lines.At(0); line.Len() == 0 {
 		node.RemoveChild(node, para)
