@@ -1,6 +1,8 @@
 package md
 
-import "testing"
+import (
+	"testing"
+)
 
 func strcmp(t *testing.T, name, got, expected string) {
 	t.Helper()
@@ -9,15 +11,13 @@ func strcmp(t *testing.T, name, got, expected string) {
 	}
 }
 
-// func TestRenderMarkup(t *testing.T) {
-// 	const _md = `**hello *world*!**` + "\n```" + `go
-// package main
+func TestParses(t *testing.T) {
+	var tests = []string{
+		">\n```\r",
+		"```\n\n",
+	}
 
-// func main() {
-// 	fmt.Println("Bruh moment.")
-// }
-// ` + "```"
-
-// 	html := ParseToMarkup([]byte(_md))
-// 	fmt.Println(string(html))
-// }
+	for _, test := range tests {
+		Parse([]byte(test))
+	}
+}
