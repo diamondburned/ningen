@@ -158,6 +158,11 @@ func (b fenced) _close(node ast.Node, r text.Reader, pc parser.Context) {
 			length--
 		}
 
+		// If we've sliced everything away.
+		if length == 0 {
+			return
+		}
+
 		// Trim the new last line's trailing whitespace
 		last = lines.At(length - 1)
 		lines.Set(length-1, last.TrimRightSpace(r.Source()))
