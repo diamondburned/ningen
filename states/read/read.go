@@ -85,7 +85,6 @@ func (r *State) FindLast(channelID discord.Snowflake) *gateway.ReadState {
 
 func (r *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 	r.mutex.Lock()
-	defer r.mutex.Unlock()
 
 	rs, ok := r.states[chID]
 	if !ok {
@@ -114,6 +113,9 @@ func (r *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 	unread := rs.LastMessageID != msgID
 	rscp := *rs
 
+	// Unlock mutex early.
+	r.mutex.Unlock()
+
 	// Announce that there is a change.
 	for _, fn := range r.onChanges {
 		fn(rscp, unread)
@@ -122,7 +124,6 @@ func (r *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 
 func (r *State) MarkRead(chID, msgID discord.Snowflake) {
 	r.mutex.Lock()
-	defer r.mutex.Unlock()
 
 	rs, ok := r.states[chID]
 	if !ok {
@@ -141,8 +142,13 @@ func (r *State) MarkRead(chID, msgID discord.Snowflake) {
 	rs.LastMessageID = msgID
 	rs.MentionCount = 0
 
-	// Announce.
+	// copy
 	rscp := *rs
+
+	// Unlock mutex early.
+	r.mutex.Unlock()
+
+	// Announce.
 	for _, fn := range r.onChanges {
 		fn(rscp, false)
 	}
