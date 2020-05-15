@@ -85,6 +85,7 @@ func (r *State) FindLast(channelID discord.Snowflake) *gateway.ReadState {
 
 func (r *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 	r.mutex.Lock()
+	defer r.mutex.Unlock()
 
 	rs, ok := r.states[chID]
 	if !ok {
@@ -113,17 +114,22 @@ func (r *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 	unread := rs.LastMessageID != msgID
 	rscp := *rs
 
-	// Unlock mutex early.
-	r.mutex.Unlock()
-
-	// Announce that there is a change.
-	for _, fn := range r.onChanges {
-		fn(rscp, unread)
-	}
+	// Force callbacks to run in a goroutine. This is because MarkRead and
+	// MarkUnread may be called by the user in their main thread, which means
+	// these callbacks may occupy the main loop. It may also run in any other
+	// goroutine, making it impossible to properly synchronize these callbacks.
+	// Doing this helps making a consistent synchronizing behavior.
+	go func() {
+		// Announce that there is a change.
+		for _, fn := range r.onChanges {
+			fn(rscp, unread)
+		}
+	}()
 }
 
 func (r *State) MarkRead(chID, msgID discord.Snowflake) {
 	r.mutex.Lock()
+	defer r.mutex.Unlock()
 
 	rs, ok := r.states[chID]
 	if !ok {
@@ -145,16 +151,15 @@ func (r *State) MarkRead(chID, msgID discord.Snowflake) {
 	// copy
 	rscp := *rs
 
-	// Unlock mutex early.
-	r.mutex.Unlock()
+	go func() {
+		// Announce.
+		for _, fn := range r.onChanges {
+			fn(rscp, false)
+		}
 
-	// Announce.
-	for _, fn := range r.onChanges {
-		fn(rscp, false)
-	}
-
-	// Send out Ack in the background.
-	go r.ack(chID, msgID)
+		// Send out Ack in the background.
+		r.ack(chID, msgID)
+	}()
 }
 
 func (r *State) ack(chID, msgID discord.Snowflake) {
