@@ -71,6 +71,7 @@ func NewState(state *state.State, h handler.AddHandler) *State {
 		SearchFrequency: time.Second,
 		SearchLimit:     50,
 	}
+	h.AddHandler(s.onListUpdateState)
 	h.AddHandler(s.onListUpdate)
 	h.AddHandler(s.onMembers)
 	return s
@@ -351,6 +352,29 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
 
 	if synced {
 		m.sync(ev.ID, ml, ev.GuildID)
+	}
+}
+
+// onListUpdateState is called when onListUpdate is called, but this one updates
+// the local member/presence state instead.
+func (m *State) onListUpdateState(ev *gateway.GuildMemberListUpdate) {
+	for _, op := range ev.Ops {
+		switch op.Op {
+		case "SYNC", "INSERT", "UPDATE":
+			for _, item := range append(op.Items, op.Item) {
+				if item.Member != nil {
+					m.state.MemberSet(ev.GuildID, &item.Member.Member)
+					m.state.PresenceSet(ev.GuildID, &item.Member.Presence)
+				}
+			}
+		case "INVALIDATE", "DELETE":
+			for _, item := range append(op.Items, op.Item) {
+				if item.Member != nil {
+					m.state.MemberRemove(ev.GuildID, item.Member.Member.User.ID)
+					m.state.PresenceRemove(ev.GuildID, item.Member.Member.User.ID)
+				}
+			}
+		}
 	}
 }
 
