@@ -16,6 +16,11 @@ import (
 	"github.com/twmb/murmur3"
 )
 
+var (
+	// ErrListNotFound is returned if GetMemberList can't find the list.
+	ErrListNotFound = errors.New("List not found.")
+)
+
 // State handles members and the member list.
 //
 // Members
@@ -45,7 +50,6 @@ type State struct {
 	state  *state.State
 	guilds sync.Map // snowflake -> *Guild
 
-	lists     sync.Map // string -> *List
 	hashCache sync.Map // channelID -> string
 
 	maxFetchMu sync.Mutex
@@ -86,6 +90,9 @@ type Guild struct {
 
 	// last SearchMember call.
 	lastreq time.Time
+
+	// not mutex guarded
+	lists sync.Map // string -> *List
 }
 
 // SearchMember queries Discord for a list of members with the given query
@@ -248,6 +255,12 @@ func (m *State) RequestMemberList(guildID, channelID discord.Snowflake, chunk in
 //
 // Reference: https://luna.gitlab.io/discord-unofficial-docs/lazy_guilds.html
 func (m *State) GetMemberList(guildID, channelID discord.Snowflake, fn func(*List)) error {
+	gv, ok := m.guilds.Load(guildID)
+	if !ok {
+		return ErrListNotFound
+	}
+	guild := gv.(*Guild)
+
 	// Compute Discord's magical member list ID thing.
 	hv, ok := m.hashCache.Load(channelID)
 	if !ok {
@@ -257,16 +270,17 @@ func (m *State) GetMemberList(guildID, channelID discord.Snowflake, fn func(*Lis
 		}
 
 		hv = computeListID(c.Permissions)
+		// If there's no hash, then we default to "everyone".
+		if hv == "" {
+			hv = "everyone"
+		}
+		// TODO: account for when Channel changes overrides.
+
 		m.hashCache.Store(channelID, hv)
 	}
 
-	// If there's no hash, then we default to "everyone".
-	if hv == "" {
-		hv = "everyone"
-	}
-
 	// Query for the *List.
-	ls, ok := m.lists.Load(hv)
+	ls, ok := guild.lists.Load(hv)
 	if !ok {
 		return errors.New("List not found.")
 	}
@@ -282,7 +296,10 @@ func (m *State) GetMemberList(guildID, channelID discord.Snowflake, fn func(*Lis
 // onListUpdate is called a bit after RequestGuildMembers if the Channels field
 // is filled. It handles updating the local members list state.
 func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
-	v, _ := m.lists.LoadOrStore(ev.ID, &List{})
+	gv, _ := m.guilds.LoadOrStore(ev.GuildID, &Guild{})
+	guild := gv.(*Guild)
+
+	v, _ := guild.lists.LoadOrStore(ev.ID, &List{})
 	ml := v.(*List)
 
 	ml.mu.Lock()
