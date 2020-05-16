@@ -260,6 +260,11 @@ func (m *State) GetMemberList(guildID, channelID discord.Snowflake, fn func(*Lis
 		m.hashCache.Store(channelID, hv)
 	}
 
+	// If there's no hash, then we default to "everyone".
+	if hv == "" {
+		hv = "everyone"
+	}
+
 	// Query for the *List.
 	ls, ok := m.lists.Load(hv)
 	if !ok {
