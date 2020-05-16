@@ -15,6 +15,31 @@ import (
 	"github.com/twmb/murmur3"
 )
 
+// State handles members and the member list.
+//
+// Members
+//
+// Discord wants all clients to request member information over the gateway
+// instead of using the usual member API endpoint. This makes sense, as it
+// reduces the load onto the server, but it also makes it a lot more painful to
+// efficiently request members.
+//
+// The state helps abstract this away by allowing the caller to request multiple
+// times the same member. If the gateway has yet to reply or if the state
+// already has the member, the function will not send a command over.
+//
+// Member List
+//
+// Discord also wants all clients to not use the members (plural) endpoint. In
+// fact, calling this endpoint will immediately unverify the user's email.
+//
+// The state helps abstract this by keeping a local state of all member lists as
+// well as providing APIs to query the member list. Keep in mind that since most
+// channels typically have its own member list, this might be pretty hefty on
+// memory.
+//
+// For reference, go to
+// https://luna.gitlab.io/discord-unofficial-docs/lazy_guilds.html.
 type State struct {
 	state  *state.State
 	guilds sync.Map // snowflake -> *Guild

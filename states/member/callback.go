@@ -22,16 +22,21 @@ type callbacks struct {
 	onMember []MemberCallback
 }
 
+// OnOP is called when Discord updates the member list.
 func (c *callbacks) OnOP(fn OPCallback) {
 	c.cbMut.Lock()
 	c.onOP = append(c.onOP, fn)
 	c.cbMut.Unlock()
 }
+
+// OnSync is called when Discord initializes any chunk of the member list.
 func (c *callbacks) OnSync(fn SyncCallback) {
 	c.cbMut.Lock()
 	c.onSync = append(c.onSync, fn)
 	c.cbMut.Unlock()
 }
+
+// OnMember is called when Discord replies with the requested member.
 func (c *callbacks) OnMember(fn MemberCallback) {
 	c.cbMut.Lock()
 	c.onMember = append(c.onMember, fn)
