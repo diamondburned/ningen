@@ -9,27 +9,27 @@ import (
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/ningen/states/emoji"
+	"github.com/diamondburned/ningen/states/member"
 	"github.com/diamondburned/ningen/states/mute"
 	"github.com/diamondburned/ningen/states/read"
 )
 
 type State struct {
 	*state.State
-	Read  *read.State
-	Muted *mute.State
-	Emoji *emoji.State
+	Read    *read.State
+	Muted   *mute.State
+	Emoji   *emoji.State
+	Members *member.State
 }
 
 func FromState(s *state.State) (*State, error) {
 	state := &State{
-		State: s,
-		Read:  read.NewState(s, s),
-		Muted: mute.NewState(s, s),
-		Emoji: emoji.NewState(s),
+		State:   s,
+		Read:    read.NewState(s, s),
+		Muted:   mute.NewState(s, s),
+		Emoji:   emoji.NewState(s),
+		Members: member.NewState(s, s),
 	}
-
-	// Users can override later.
-	s.Handler.Synchronous = false
 
 	s.AddHandler(func(r *gateway.SessionsReplaceEvent) {
 		if u, _ := s.Me(); u != nil {

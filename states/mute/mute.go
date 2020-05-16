@@ -41,7 +41,7 @@ func NewState(store state.Store, r handler.AddHandler) *State {
 					delete(mutestate.chMutes, ch.ChannelID)
 				}
 
-				mutestate.settings[i] = gateway.UserGuildSettings(*u)
+				mutestate.settings[i] = u.UserGuildSettings
 			}
 		}
 	})
