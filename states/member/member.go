@@ -251,7 +251,8 @@ func (m *State) RequestMemberList(guildID, channelID discord.Snowflake, chunk in
 
 // GetMemberList looks up for the member list. It returns an error if no list
 // is found. The callback will be called with the mutex locked to prevent race
-// conditions.
+// conditions. The function can be used to check if the list is there or not
+// with a nil callback.
 //
 // Reference: https://luna.gitlab.io/discord-unofficial-docs/lazy_guilds.html
 func (m *State) GetMemberList(guildID, channelID discord.Snowflake, fn func(*List)) error {
@@ -284,6 +285,12 @@ func (m *State) GetMemberList(guildID, channelID discord.Snowflake, fn func(*Lis
 	if !ok {
 		return errors.New("List not found.")
 	}
+
+	// Allow nil callback.
+	if fn == nil {
+		return nil
+	}
+
 	list := ls.(*List)
 
 	list.mu.Lock()
