@@ -429,5 +429,5 @@ func computeListID(overrides []discord.Overwrite) string {
 
 	var mm3Input = strings.Join(hashInput, ",")
 	// TODO: confirm.
-	return strconv.FormatUint(murmur3.Sum64([]byte(mm3Input)), 64)
+	return strconv.FormatUint(murmur3.Sum64([]byte(mm3Input)), 10)
 }
