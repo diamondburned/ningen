@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
@@ -53,6 +54,11 @@ type State struct {
 	callbacks // OnOP and OnSync
 
 	OnError func(error)
+
+	// RequestFrequency is the duration before the next SearchMember is allowed
+	// to do anything else. Default is 1s.
+	SearchFrequency time.Duration
+	SearchLimit     uint // 50
 }
 
 func NewState(state *state.State, h handler.AddHandler) *State {
@@ -62,6 +68,8 @@ func NewState(state *state.State, h handler.AddHandler) *State {
 		OnError: func(err error) {
 			log.Println("Members list error:", err)
 		},
+		SearchFrequency: time.Second,
+		SearchLimit:     50,
 	}
 	h.AddHandler(s.onListUpdate)
 	h.AddHandler(s.onMembers)
@@ -69,10 +77,43 @@ func NewState(state *state.State, h handler.AddHandler) *State {
 }
 
 type Guild struct {
-	reqmut sync.Mutex
+	mut sync.Mutex
+
 	// map to keep track of members being requested, which allows duplicate
 	// calls.
 	reqing map[discord.Snowflake]struct{}
+
+	// last SearchMember call.
+	lastreq time.Time
+}
+
+// SearchMember queries Discord for a list of members with the given query
+// string.
+func (m *State) SearchMember(guildID discord.Snowflake, query string) {
+	v, _ := m.guilds.LoadOrStore(guildID, &Guild{})
+	gd := v.(*Guild)
+
+	gd.mut.Lock()
+	defer gd.mut.Unlock()
+
+	if gd.lastreq.Add(m.SearchFrequency).After(time.Now()) {
+		return
+	}
+
+	gd.lastreq = time.Now()
+
+	go func() {
+		err := m.state.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
+			GuildID:   []discord.Snowflake{guildID},
+			Query:     query,
+			Presences: true,
+			Limit:     m.SearchLimit,
+		})
+
+		if err != nil {
+			m.OnError(errors.Wrap(err, "Failed to search guild members"))
+		}
+	}()
 }
 
 // RequestMember tries to ask the gateway for a member from the ID. This method
@@ -88,18 +129,22 @@ func (m *State) RequestMember(guildID, memberID discord.Snowflake) {
 		return
 	}
 
-	v, _ := m.guilds.LoadOrStore(guildID, &Guild{
-		reqing: make(map[discord.Snowflake]struct{}),
-	})
+	v, _ := m.guilds.LoadOrStore(guildID, &Guild{})
 	guild := v.(*Guild)
 
-	guild.reqmut.Lock()
-	defer guild.reqmut.Unlock()
+	guild.mut.Lock()
+	defer guild.mut.Unlock()
 
-	// Check if the member is already being requested.
-	if _, ok := guild.reqing[memberID]; ok {
-		return
+	if guild.reqing == nil {
+		guild.reqing = make(map[discord.Snowflake]struct{})
+	} else {
+		// Check if the member is already being requested.
+		if _, ok := guild.reqing[memberID]; ok {
+			return
+		}
 	}
+
+	guild.reqing[memberID] = struct{}{}
 
 	go func() {
 		err := m.state.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
@@ -109,9 +154,9 @@ func (m *State) RequestMember(guildID, memberID discord.Snowflake) {
 		})
 
 		if err != nil {
-			guild.reqmut.Lock()
+			guild.mut.Lock()
 			delete(guild.reqing, memberID)
-			guild.reqmut.Unlock()
+			guild.mut.Unlock()
 
 			m.OnError(errors.Wrap(err, "Failed to request guild members"))
 			return
@@ -128,7 +173,7 @@ func (m *State) onMembers(c *gateway.GuildMembersChunkEvent) {
 	v, _ := m.guilds.LoadOrStore(c.GuildID, &Guild{})
 	guild := v.(*Guild)
 
-	guild.reqmut.Lock()
+	guild.mut.Lock()
 
 	// Add all members to state first.
 	for _, member := range c.Members {
@@ -140,7 +185,7 @@ func (m *State) onMembers(c *gateway.GuildMembersChunkEvent) {
 	}
 
 	// Release the lock early so callbacks wouldn't affect it.
-	guild.reqmut.Unlock()
+	guild.mut.Unlock()
 
 	for _, member := range c.Members {
 		m.callbacks.member(c.GuildID, member)
