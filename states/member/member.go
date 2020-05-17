@@ -233,8 +233,6 @@ func (m *State) RequestMemberList(guildID, channelID discord.Snowflake, chunk in
 			})
 		}
 
-		log.Println("Chunks:", chunks)
-
 		// Subscribe.
 		err := m.state.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
 			GuildID: guildID,
@@ -271,12 +269,6 @@ func (m *State) GetMemberList(guildID, channelID discord.Snowflake, fn func(*Lis
 		}
 
 		hv = computeListID(c.Permissions)
-		// If there's no hash, then we default to "everyone".
-		if hv == "" {
-			hv = "everyone"
-		}
-		// TODO: account for when Channel changes overrides.
-
 		m.hashCache.Store(channelID, hv)
 	}
 
@@ -416,18 +408,29 @@ func growItems(items *[]*gateway.GuildMemberListOpItem, maxLen int) {
 }
 
 func computeListID(overrides []discord.Overwrite) string {
-	var hashInput = make([]string, 0, len(overrides))
+	var allows, denies []discord.Snowflake
 
 	for _, perm := range overrides {
 		switch {
-		case perm.Allow.Has(discord.PermissionReadMessageHistory):
-			hashInput = append(hashInput, "allow:"+perm.ID.String())
-		case perm.Deny.Has(discord.PermissionReadMessageHistory):
-			hashInput = append(hashInput, "deny:"+perm.ID.String())
+		case perm.Allow.Has(discord.PermissionViewChannel):
+			allows = append(allows, perm.ID)
+		case perm.Deny.Has(discord.PermissionViewChannel):
+			denies = append(denies, perm.ID)
 		}
 	}
 
-	var mm3Input = strings.Join(hashInput, ",")
-	// TODO: confirm.
-	return strconv.FormatUint(murmur3.Sum64([]byte(mm3Input)), 10)
+	if len(allows) == 0 && len(denies) == 0 {
+		return "everyone"
+	}
+
+	var input = make([]string, 0, len(allows)+len(denies))
+	for _, a := range allows {
+		input = append(input, "allow:"+a.String())
+	}
+	for _, b := range denies {
+		input = append(input, "deny:"+b.String())
+	}
+
+	mm3Input := strings.Join(input, ",")
+	return strconv.FormatUint(uint64(murmur3.StringSum32(mm3Input)), 10)
 }
