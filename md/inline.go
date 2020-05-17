@@ -26,8 +26,8 @@ func (e *Inline) Dump(source []byte, level int) {
 var inlineTriggers = []byte{'*', '_', '|', '~', '`'}
 
 type inlineDelimiterProcessor struct {
-	char  byte
-	match bool
+	char byte
+	attr Attribute
 }
 
 func (p *inlineDelimiterProcessor) IsDelimiter(b byte) bool {
@@ -42,32 +42,38 @@ func (p *inlineDelimiterProcessor) IsDelimiter(b byte) bool {
 }
 
 func (p *inlineDelimiterProcessor) CanOpenCloser(opener, closer *parser.Delimiter) bool {
-	return opener.Char == closer.Char
-}
-
-func (p *inlineDelimiterProcessor) OnMatch(consumes int) ast.Node {
-	var node = &Inline{
-		BaseInline: ast.BaseInline{},
-		Attr:       0,
+	var can = opener.Char == closer.Char && opener.Length == closer.Length
+	if !can {
+		return false
 	}
-	switch {
+
+	switch consumes := closer.Length; {
 	case p.char == '_' && consumes == 2: // __
-		node.Attr = AttrUnderline
+		p.attr = AttrUnderline
 	case p.char == '_' && consumes == 1: // _
 		fallthrough
 	case p.char == '*' && consumes == 1: // *
-		node.Attr = AttrItalics
+		p.attr = AttrItalics
 	case p.char == '*' && consumes == 2: // **
-		node.Attr = AttrBold
+		p.attr = AttrBold
 	case p.char == '|' && consumes == 2: // ||
-		node.Attr = AttrSpoiler
+		p.attr = AttrSpoiler
 	case p.char == '~' && consumes == 2: // ~~
-		node.Attr = AttrStrikethrough
+		p.attr = AttrStrikethrough
 	case p.char == '`' && consumes == 1: // `
-		node.Attr = AttrMonospace
+		p.attr = AttrMonospace
+	default:
+		return false
 	}
-	p.match = node.Attr != 0
-	return node
+
+	return true
+}
+
+func (p *inlineDelimiterProcessor) OnMatch(consumes int) ast.Node {
+	return &Inline{
+		BaseInline: ast.BaseInline{},
+		Attr:       p.attr,
+	}
 }
 
 type inline struct{}
@@ -83,17 +89,12 @@ func (inline) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.N
 	processor := inlineDelimiterProcessor{}
 
 	node := parser.ScanDelimiter(line, before, 1, &processor)
-	if node == nil || !processor.match {
+	if node == nil {
 		return nil
 	}
-
-	if inline, ok := node.FirstChild().(*Inline); ok && inline.Attr == 0 {
-		return nil
-	}
-
 	node.Segment = segment.WithStop(segment.Start + node.OriginalLength)
 
-	block.Advance(node.OriginalLength)
+	block.Advance(node.Length)
 	pc.PushDelimiter(node)
 
 	return node

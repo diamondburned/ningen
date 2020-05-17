@@ -9,8 +9,7 @@ import (
 type Attribute uint16
 
 const (
-	_ Attribute = 1 << iota
-	AttrBold
+	AttrBold Attribute = 1 << iota
 	AttrItalics
 	AttrUnderline
 	AttrStrikethrough
@@ -51,7 +50,7 @@ func (a *Attribute) Remove(attr Attribute) {
 }
 
 func (a Attribute) Markup() string {
-	var attrs = make([]string, 0, 7)
+	var attrs = make([]string, 0, 1)
 
 	if a.Has(AttrBold) {
 		attrs = append(attrs, `weight="bold"`)
@@ -85,7 +84,7 @@ func (a Attribute) StringInt() string {
 }
 
 func (a Attribute) String() string {
-	var attrs = make([]string, 0, 7)
+	var attrs = make([]string, 0, 1)
 	if a.Has(AttrBold) {
 		attrs = append(attrs, "bold")
 	}
