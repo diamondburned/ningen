@@ -235,7 +235,9 @@ func (m *State) RequestMemberList(guildID, channelID discord.Snowflake, chunk in
 
 		// Subscribe.
 		err := m.state.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
-			GuildID: guildID,
+			GuildID:    guildID,
+			Typing:     true,
+			Activities: true,
 			Channels: map[discord.Snowflake][][2]int{
 				channelID: chunks,
 			},
