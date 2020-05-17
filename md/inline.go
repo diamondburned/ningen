@@ -26,7 +26,8 @@ func (e *Inline) Dump(source []byte, level int) {
 var inlineTriggers = []byte{'*', '_', '|', '~', '`'}
 
 type inlineDelimiterProcessor struct {
-	char byte
+	char  byte
+	match bool
 }
 
 func (p *inlineDelimiterProcessor) IsDelimiter(b byte) bool {
@@ -47,6 +48,7 @@ func (p *inlineDelimiterProcessor) CanOpenCloser(opener, closer *parser.Delimite
 func (p *inlineDelimiterProcessor) OnMatch(consumes int) ast.Node {
 	var node = &Inline{
 		BaseInline: ast.BaseInline{},
+		Attr:       0,
 	}
 	switch {
 	case p.char == '_' && consumes == 2: // __
@@ -64,6 +66,7 @@ func (p *inlineDelimiterProcessor) OnMatch(consumes int) ast.Node {
 	case p.char == '`' && consumes == 1: // `
 		node.Attr = AttrMonospace
 	}
+	p.match = node.Attr != 0
 	return node
 }
 
@@ -77,10 +80,17 @@ func (inline) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.N
 	before := block.PrecendingCharacter()
 	line, segment := block.PeekLine()
 
-	node := parser.ScanDelimiter(line, before, 1, &inlineDelimiterProcessor{})
-	if node == nil {
+	processor := inlineDelimiterProcessor{}
+
+	node := parser.ScanDelimiter(line, before, 1, &processor)
+	if node == nil || !processor.match {
 		return nil
 	}
+
+	if inline, ok := node.FirstChild().(*Inline); ok && inline.Attr == 0 {
+		return nil
+	}
+
 	node.Segment = segment.WithStop(segment.Start + node.OriginalLength)
 
 	block.Advance(node.OriginalLength)
