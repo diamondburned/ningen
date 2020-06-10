@@ -2,8 +2,6 @@
 package read
 
 import (
-	"log"
-	"runtime/debug"
 	"sync"
 
 	"github.com/diamondburned/arikawa/api"
@@ -153,7 +151,7 @@ func (r *State) MarkRead(chID, msgID discord.Snowflake) {
 	// copy
 	rscp := *rs
 
-	log.Println("MarkRead called at", string(debug.Stack()))
+	// log.Println("MarkRead called at", string(debug.Stack()))
 
 	// Send out Ack in the background.
 	go r.ack(chID, msgID)
