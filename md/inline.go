@@ -42,12 +42,12 @@ func (p *inlineDelimiterProcessor) IsDelimiter(b byte) bool {
 }
 
 func (p *inlineDelimiterProcessor) CanOpenCloser(opener, closer *parser.Delimiter) bool {
-	var can = opener.Char == closer.Char && opener.Length == closer.Length
+	var can = opener.Char == closer.Char
 	if !can {
 		return false
 	}
 
-	switch consumes := closer.Length; {
+	switch consumes := opener.Length; {
 	case p.char == '_' && consumes == 2: // __
 		p.attr = AttrUnderline
 	case p.char == '_' && consumes == 1: // _

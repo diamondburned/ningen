@@ -22,6 +22,8 @@ func main() {
 }
 ` + "```" + `
 [test](https://google.com)
+
+**bold and *italics***
 `
 
 func TestRenderer(t *testing.T) {
