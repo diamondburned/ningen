@@ -3,17 +3,19 @@ package md
 import (
 	"bytes"
 	"strconv"
+	"strings"
 )
 
-type Attribute uint8
+type Attribute uint16
 
 const (
-	AttrBold Attribute = iota
+	AttrBold Attribute = 1 << iota
 	AttrItalics
 	AttrUnderline
 	AttrStrikethrough
 	AttrSpoiler
 	AttrMonospace
+	AttrQuoted
 )
 
 func TagAttribute(tag []byte) Attribute {
@@ -36,8 +38,8 @@ func TagAttribute(tag []byte) Attribute {
 	return 0
 }
 
-func (a Attribute) Is(attr Attribute) bool {
-	return a == attr
+func (a Attribute) Has(attr Attribute) bool {
+	return a&attr == attr
 }
 
 func (a *Attribute) Add(attr Attribute) {
@@ -47,27 +49,64 @@ func (a *Attribute) Remove(attr Attribute) {
 	*a &= ^attr
 }
 
+func (a Attribute) Markup() string {
+	var attrs = make([]string, 0, 1)
+
+	if a.Has(AttrBold) {
+		attrs = append(attrs, `weight="bold"`)
+	}
+	if a.Has(AttrItalics) {
+		attrs = append(attrs, `style="italic"`)
+	}
+	if a.Has(AttrUnderline) {
+		attrs = append(attrs, `underline="single"`)
+	}
+	if a.Has(AttrStrikethrough) {
+		attrs = append(attrs, `strikethrough="true"`)
+	}
+	if a.Has(AttrSpoiler) {
+		attrs = append(attrs, `foreground="#808080"`) // no fancy click here
+	}
+	if a.Has(AttrMonospace) {
+		attrs = append(attrs, `font_family="monospace"`)
+	}
+
+	// only append this if not spoiler to avoid duplicate tags
+	if a.Has(AttrQuoted) && !a.Has(AttrStrikethrough) {
+		attrs = append(attrs, `foreground="#789922"`)
+	}
+
+	return strings.Join(attrs, " ")
+}
+
 func (a Attribute) StringInt() string {
 	return strconv.FormatUint(uint64(a), 10)
 }
 
-func (a Attribute) String() (attrs string) {
-	switch a {
-	case AttrBold:
-		attrs = "bold"
-	case AttrItalics:
-		attrs = "italics"
-	case AttrUnderline:
-		attrs = "underline"
-	case AttrStrikethrough:
-		attrs = "strikethrough"
-	case AttrSpoiler:
-		attrs = "spoiler"
-	case AttrMonospace:
-		attrs = "monospace"
+func (a Attribute) String() string {
+	var attrs = make([]string, 0, 1)
+	if a.Has(AttrBold) {
+		attrs = append(attrs, "bold")
 	}
-
-	return
+	if a.Has(AttrItalics) {
+		attrs = append(attrs, "italics")
+	}
+	if a.Has(AttrUnderline) {
+		attrs = append(attrs, "underline")
+	}
+	if a.Has(AttrStrikethrough) {
+		attrs = append(attrs, "strikethrough")
+	}
+	if a.Has(AttrSpoiler) {
+		attrs = append(attrs, "spoiler")
+	}
+	if a.Has(AttrMonospace) {
+		attrs = append(attrs, "monospace")
+	}
+	if a.Has(AttrQuoted) {
+		attrs = append(attrs, "quoted")
+	}
+	return strings.Join(attrs, ", ")
 }
 
 var EmptyTag = Tag{}
