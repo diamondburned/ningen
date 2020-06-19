@@ -6,6 +6,8 @@ github.com/diamondburned/arikawa v0.8.7-0.20200522214036-530bff74a2c6 h1:FvFNg69
 github.com/diamondburned/arikawa v0.8.7-0.20200522214036-530bff74a2c6/go.mod h1:nIhVIatzTQhPUa7NB8w4koG1RF9gYbpAr8Fj8sKq660=
 github.com/diamondburned/arikawa v0.9.5-0.20200619075944-01021f09025b h1:fTR1esGjH+rR3ssd2vlZoxYLtML29paO0JjRV2lB3s0=
 github.com/diamondburned/arikawa v0.9.5-0.20200619075944-01021f09025b/go.mod h1:nIhVIatzTQhPUa7NB8w4koG1RF9gYbpAr8Fj8sKq660=
+github.com/diamondburned/arikawa v0.9.5 h1:P1ffsp+NHT22wWKYFVC8CdlGRLzPuUV9FcCBKOCJpCI=
+github.com/diamondburned/arikawa v0.9.5/go.mod h1:nIhVIatzTQhPUa7NB8w4koG1RF9gYbpAr8Fj8sKq660=
 github.com/gorilla/schema v1.1.0 h1:CamqUDOFUBqzrvxuz2vEwo8+SUdwsluFh7IlzJh30LY=
 github.com/gorilla/schema v1.1.0/go.mod h1:kgLaKoK1FELgZqMAVxx/5cbj0kT+57qxUrAlIO2eleU=
 github.com/gorilla/websocket v1.4.2 h1:+/TMaTYc4QFitKJxsQ7Yye35DkWvkdLcvGKqM+x0Ufc=
