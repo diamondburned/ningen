@@ -5,7 +5,29 @@ import (
 
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
+	"go4.org/bytereplacer"
 )
+
+var unescaper = bytereplacer.New("\\\\", "\\", "\\", "")
+
+// var doubleBackslash = []byte{'\\', '\\'}
+
+// Unescape handles escape characters. This is a helper function for renderers.
+func Unescape(src []byte) []byte {
+	return unescaper.Replace(src)
+}
+
+type unescapeWriter struct {
+	w io.Writer
+}
+
+func (w unescapeWriter) Write(b []byte) (int, error) {
+	return w.w.Write(Unescape(b))
+}
+
+func UnescapeWriter(w io.Writer) io.Writer {
+	return unescapeWriter{w}
+}
 
 // BasicRenderer renders the package's ast.Nodes into simple unformatted
 // plain text. It serves as an implementation reference. However, this
@@ -18,6 +40,9 @@ var DefaultRenderer renderer.Renderer = &BasicRenderer{}
 func (r *BasicRenderer) AddOptions(...renderer.Option) {}
 
 func (r *BasicRenderer) Render(w io.Writer, source []byte, n ast.Node) error {
+	// Wrap the current writer behind an unescaper.
+	w = UnescapeWriter(w)
+
 	return ast.Walk(n, func(node ast.Node, enter bool) (ast.WalkStatus, error) {
 		return r.walker(w, source, node, enter), nil
 	})

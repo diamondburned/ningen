@@ -20,7 +20,9 @@ func (e *Inline) Kind() ast.NodeKind {
 
 // Dump implements Node.Dump
 func (e *Inline) Dump(source []byte, level int) {
-	ast.DumpHelper(e, source, level, nil, nil)
+	ast.DumpHelper(e, source, level, map[string]string{
+		"Attributes": e.Attr.String(),
+	}, nil)
 }
 
 var inlineTriggers = []byte{'*', '_', '|', '~', '`'}
