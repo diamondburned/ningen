@@ -94,7 +94,7 @@ func (inline) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.N
 	}
 	node.Segment = segment.WithStop(segment.Start + node.OriginalLength)
 
-	block.Advance(node.Length)
+	block.Advance(node.OriginalLength)
 	pc.PushDelimiter(node)
 
 	return node
