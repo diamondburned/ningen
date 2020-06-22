@@ -34,7 +34,7 @@ func NewState(state *state.State, r handler.AddHandler) *State {
 	u, err := state.Me()
 	if err != nil {
 		// TODO: remove panic?
-		panic("Failed to get current user's ID.")
+		panic("Failed to get current user's ID: " + err.Error())
 	}
 
 	readstate.selfID = u.ID
