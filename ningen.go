@@ -16,20 +16,26 @@ import (
 
 type State struct {
 	*state.State
+
+	// nil before Open().
 	Read    *read.State
 	Muted   *mute.State
 	Emoji   *emoji.State
 	Members *member.State
 }
 
+// FromState wraps a normal state.
 func FromState(s *state.State) (*State, error) {
 	state := &State{
-		State:   s,
-		Read:    read.NewState(s, s),
-		Muted:   mute.NewState(s, s),
-		Emoji:   emoji.NewState(s),
-		Members: member.NewState(s, s),
+		State: s,
 	}
+
+	s.AddHandler(func(r *gateway.ReadyEvent) {
+		state.Read = read.NewState(s, s)
+		state.Muted = mute.NewState(s, s)
+		state.Emoji = emoji.NewState(s)
+		state.Members = member.NewState(s, s)
+	})
 
 	s.AddHandler(func(r *gateway.SessionsReplaceEvent) {
 		if u, _ := s.Me(); u != nil {
