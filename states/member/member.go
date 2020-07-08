@@ -91,8 +91,42 @@ type Guild struct {
 	// last SearchMember call.
 	lastreq time.Time
 
+	// whether or not the guild is subscribed.
+	subscribed bool
+
 	// not mutex guarded
 	lists sync.Map // string -> *List
+}
+
+// Subscribe subscribes the guild to typing events and activities. Callers cal
+// call this multiple times concurrently. The state will ensure that only one
+// command is sent to the gateway.
+//
+// The gateway command will be sent asynchronously.
+func (m *State) Subscribe(guildID discord.Snowflake) {
+	v, _ := m.guilds.LoadOrStore(guildID, &Guild{})
+	gd := v.(*Guild)
+
+	gd.mut.Lock()
+	defer gd.mut.Unlock()
+
+	// Exit if already subscribed.
+	if gd.subscribed {
+		return
+	}
+
+	go func() {
+		// Subscribe.
+		err := m.state.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
+			GuildID:    guildID,
+			Typing:     true,
+			Activities: true,
+		})
+
+		if err != nil {
+			m.OnError(errors.Wrap(err, "Failed to subscribe guild"))
+		}
+	}()
 }
 
 // SearchMember queries Discord for a list of members with the given query
@@ -235,9 +269,7 @@ func (m *State) RequestMemberList(guildID, channelID discord.Snowflake, chunk in
 
 		// Subscribe.
 		err := m.state.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
-			GuildID:    guildID,
-			Typing:     true,
-			Activities: true,
+			GuildID: guildID,
 			Channels: map[discord.Snowflake][][2]int{
 				channelID: chunks,
 			},
