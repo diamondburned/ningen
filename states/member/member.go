@@ -115,6 +115,8 @@ func (m *State) Subscribe(guildID discord.Snowflake) {
 		return
 	}
 
+	gd.subscribed = true
+
 	go func() {
 		// Subscribe.
 		err := m.state.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
@@ -125,6 +127,7 @@ func (m *State) Subscribe(guildID discord.Snowflake) {
 
 		if err != nil {
 			m.OnError(errors.Wrap(err, "Failed to subscribe guild"))
+			return
 		}
 	}()
 }
