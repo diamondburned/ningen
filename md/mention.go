@@ -12,6 +12,7 @@ import (
 
 type Mention struct {
 	ast.BaseInline
+	Mentioned bool
 
 	// both could be nil
 	Channel   *discord.Channel
@@ -68,6 +69,9 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 		return nil
 	}
 
+	// True if the ping actually mentions. This is always false for channels.
+	var mentioned bool
+
 	switch string(matches[1]) {
 	case "#": // channel
 		c, err := state.Channel(d)
@@ -80,6 +84,7 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 
 		return &Mention{
 			BaseInline: ast.BaseInline{},
+			Mentioned:  mentioned,
 			Channel:    c,
 		}
 
@@ -88,30 +93,29 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 		for _, user := range msg.Mentions {
 			if user.ID == d {
 				target = &user
+				mentioned = true // user is mentioned
 				break
 			}
 		}
 
-		// Don't try, the user is probably not mentioned.
+		// Try and fetch the user anyway, but leave mentioned at false.
 		if target == nil {
-			return nil
+			target = searchMember(state, msg.GuildID, msg.ChannelID, d)
 		}
 
 		return &Mention{
 			BaseInline: ast.BaseInline{},
+			Mentioned:  mentioned,
 			GuildUser:  target,
 		}
 
 	case "@&": // role
-		var target discord.Snowflake
+		// Check if the role is actually mentioned.
 		for _, id := range msg.MentionRoleIDs {
 			if id == d {
-				target = id
+				mentioned = true
 				break
 			}
-		}
-		if !target.Valid() {
-			return nil
 		}
 
 		r, err := state.Role(msg.GuildID, d)
@@ -125,6 +129,7 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 
 		return &Mention{
 			BaseInline: ast.BaseInline{},
+			Mentioned:  mentioned,
 			GuildRole:  r,
 		}
 	}
@@ -132,16 +137,32 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 	return nil
 }
 
-func searchMember(state state.Store, guild, user discord.Snowflake) *discord.GuildUser {
-	m, err := state.Member(guild, user)
-	if err == nil {
-		return &discord.GuildUser{
-			User:   m.User,
-			Member: m,
+func searchMember(state state.Store, guild, channel, user discord.Snowflake) *discord.GuildUser {
+	// Fetch a member if the user is in a guild.
+	if guild.Valid() {
+		m, err := state.Member(guild, user)
+		if err == nil {
+			return &discord.GuildUser{
+				User:   m.User,
+				Member: m,
+			}
+		}
+	} else {
+		// Search the user if this isn't in a guild, as they might be in
+		// a DM channel.
+		c, err := state.Channel(channel)
+		if err == nil {
+			for _, u := range c.DMRecipients {
+				if u.ID == user {
+					return &discord.GuildUser{
+						User: u,
+					}
+				}
+			}
 		}
 	}
 
-	// Maybe?
+	// Maybe the Prensence search would give us some information?
 	p, err := state.Presence(guild, user)
 	if err == nil {
 		return &discord.GuildUser{
@@ -149,5 +170,12 @@ func searchMember(state state.Store, guild, user discord.Snowflake) *discord.Gui
 		}
 	}
 
-	return nil
+	// Nothing was found. Make a new user to set to both fields inside GuildUser.
+	var u = discord.User{ID: user, Username: user.String()}
+
+	// Return the dummy user.
+	return &discord.GuildUser{
+		User:   u,
+		Member: &discord.Member{User: u},
+	}
 }
