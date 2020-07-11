@@ -1,5 +1,7 @@
 package handler
 
+import "github.com/diamondburned/arikawa/gateway"
+
 // AddHandler is an interface for separate states to bind their handlers.
 type AddHandler interface {
 	AddHandler(fn interface{}) (cancel func())
@@ -31,4 +33,27 @@ func (r *Repository) Unbind() {
 	for _, fn := range r.cancel {
 		fn()
 	}
+}
+
+// ReadyInjector is an event handler wrapper that allows injecting the Ready
+// event.
+type ReadyInjector struct {
+	adder AddHandler
+	ready *gateway.ReadyEvent
+}
+
+func NewReadyInjector(adder AddHandler, r *gateway.ReadyEvent) *ReadyInjector {
+	return &ReadyInjector{
+		adder: adder,
+		ready: r,
+	}
+}
+
+func (r *ReadyInjector) AddHandler(fn interface{}) (cancel func()) {
+	if readyfn, ok := fn.(func(*gateway.ReadyEvent)); ok {
+		readyfn(r.ready)
+	}
+
+	cancel = r.adder.AddHandler(fn)
+	return
 }

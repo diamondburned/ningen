@@ -8,20 +8,25 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/ningen/handler"
 	"github.com/diamondburned/ningen/states/emoji"
 	"github.com/diamondburned/ningen/states/member"
 	"github.com/diamondburned/ningen/states/mute"
+	"github.com/diamondburned/ningen/states/note"
 	"github.com/diamondburned/ningen/states/read"
+	"github.com/diamondburned/ningen/states/relationship"
 )
 
 type State struct {
 	*state.State
 
 	// nil before Open().
-	Read    *read.State
-	Muted   *mute.State
-	Emoji   *emoji.State
-	Members *member.State
+	Note          *note.State
+	Read          *read.State
+	Muted         *mute.State
+	Emoji         *emoji.State
+	Members       *member.State
+	Relationships *relationship.State
 }
 
 // FromState wraps a normal state.
@@ -31,10 +36,14 @@ func FromState(s *state.State) (*State, error) {
 	}
 
 	s.AddHandler(func(r *gateway.ReadyEvent) {
-		state.Read = read.NewState(s, s)
-		state.Muted = mute.NewState(s, s)
+		inj := handler.NewReadyInjector(s, r)
+
+		state.Note = note.NewState(inj)
+		state.Read = read.NewState(s, inj)
+		state.Muted = mute.NewState(s, inj)
 		state.Emoji = emoji.NewState(s)
-		state.Members = member.NewState(s, s)
+		state.Members = member.NewState(s, inj)
+		state.Relationships = relationship.NewState(inj)
 	})
 
 	s.AddHandler(func(r *gateway.SessionsReplaceEvent) {
