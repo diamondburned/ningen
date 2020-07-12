@@ -98,9 +98,15 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 			}
 		}
 
-		// Try and fetch the user anyway, but leave mentioned at false.
-		if target == nil {
+		switch {
+		// If we can't find the user in mentions, then try and fetch the user
+		// anyway, but leave mentioned at false.
+		case target == nil:
 			target = searchMember(state, msg.GuildID, msg.ChannelID, d)
+
+		// If we don't have a member, then try and fetch it.
+		case target.Member == nil && msg.GuildID.Valid():
+			target.Member, _ = state.Member(msg.GuildID, d)
 		}
 
 		return &Mention{
