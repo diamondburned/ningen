@@ -20,6 +20,8 @@ import (
 type State struct {
 	*state.State
 
+	initd chan struct{}
+
 	// nil before Open().
 	NoteState         *note.State
 	ReadState         *read.State
@@ -33,6 +35,7 @@ type State struct {
 func FromState(s *state.State) (*State, error) {
 	state := &State{
 		State: s,
+		initd: make(chan struct{}, 1),
 	}
 
 	s.AddHandler(func(r *gateway.ReadyEvent) {
@@ -44,6 +47,10 @@ func FromState(s *state.State) (*State, error) {
 		state.EmojiState = emoji.NewState(s)
 		state.MemberState = member.NewState(s, inj)
 		state.RelationshipState = relationship.NewState(inj)
+
+		// Send to channel that unblocks Open() so applications don't access nil
+		// states and avoid data race.
+		state.initd <- struct{}{}
 	})
 
 	s.AddHandler(func(r *gateway.SessionsReplaceEvent) {
@@ -53,6 +60,15 @@ func FromState(s *state.State) (*State, error) {
 	})
 
 	return state, nil
+}
+
+func (s *State) Open() error {
+	if err := s.State.Open(); err != nil {
+		return err
+	}
+
+	s.initd <- struct{}{}
+	return nil
 }
 
 func (s *State) PrivateChannels() ([]discord.Channel, error) {
