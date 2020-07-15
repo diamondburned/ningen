@@ -10,12 +10,12 @@ import (
 
 type State struct {
 	mutex         sync.RWMutex
-	relationships map[discord.Snowflake]gateway.RelationshipType
+	relationships map[discord.Snowflake]discord.RelationshipType
 }
 
 func NewState(r handler.AddHandler) *State {
 	relastate := &State{
-		relationships: map[discord.Snowflake]gateway.RelationshipType{},
+		relationships: map[discord.Snowflake]discord.RelationshipType{},
 	}
 
 	r.AddHandler(func(r *gateway.ReadyEvent) {
@@ -46,7 +46,7 @@ func NewState(r handler.AddHandler) *State {
 
 // Relationship returns the relationship for the given user, or 0 if there is
 // none.
-func (r *State) Relationship(userID discord.Snowflake) gateway.RelationshipType {
+func (r *State) Relationship(userID discord.Snowflake) discord.RelationshipType {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
@@ -59,5 +59,5 @@ func (r *State) Relationship(userID discord.Snowflake) gateway.RelationshipType 
 
 // Blocked returns if the user is blocked.
 func (r *State) Blocked(userID discord.Snowflake) bool {
-	return r.Relationship(userID) == gateway.BlockedRelationship
+	return r.Relationship(userID) == discord.BlockedRelationship
 }
