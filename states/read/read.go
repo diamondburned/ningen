@@ -49,7 +49,8 @@ func NewState(state *state.State, r handler.AddHandler) *State {
 	})
 
 	r.AddHandler(func(a *gateway.MessageAckEvent) {
-		readstate.MarkRead(a.ChannelID, a.MessageID)
+		// do not send a duplicate ack
+		readstate.markRead(a.ChannelID, a.MessageID, false)
 	})
 
 	r.AddHandler(func(c *gateway.MessageCreateEvent) {
@@ -128,6 +129,11 @@ func (r *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 }
 
 func (r *State) MarkRead(chID, msgID discord.Snowflake) {
+	// send ack
+	r.markRead(chID, msgID, true)
+}
+
+func (r *State) markRead(chID, msgID discord.Snowflake, sendack bool) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -153,7 +159,9 @@ func (r *State) MarkRead(chID, msgID discord.Snowflake) {
 
 	// log.Println("MarkRead called at", string(debug.Stack()))
 
-	// Send out Ack in the background.
+	// Send out Ack in the background, but only if we explicitly want to, that
+	// is, if MarkRead is called. In the event that the gateway receives an Ack,
+	// we don't want to send another one of the same.
 	go r.ack(chID, msgID)
 
 	go func() {
@@ -174,6 +182,7 @@ func (r *State) ack(chID, msgID discord.Snowflake) {
 		return
 	}
 
+	// Atomically guard the last ack struct.
 	r.ackMutex.Lock()
 	defer r.ackMutex.Unlock()
 
