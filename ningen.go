@@ -21,12 +21,12 @@ type State struct {
 	*state.State
 
 	// nil before Open().
-	Note          *note.State
-	Read          *read.State
-	Muted         *mute.State
-	Emoji         *emoji.State
-	Members       *member.State
-	Relationships *relationship.State
+	NoteState         *note.State
+	ReadState         *read.State
+	MutedState        *mute.State
+	EmojiState        *emoji.State
+	MemberState       *member.State
+	RelationshipState *relationship.State
 }
 
 // FromState wraps a normal state.
@@ -38,12 +38,12 @@ func FromState(s *state.State) (*State, error) {
 	s.AddHandler(func(r *gateway.ReadyEvent) {
 		inj := handler.NewReadyInjector(s, r)
 
-		state.Note = note.NewState(inj)
-		state.Read = read.NewState(s, inj)
-		state.Muted = mute.NewState(s, inj)
-		state.Emoji = emoji.NewState(s)
-		state.Members = member.NewState(s, inj)
-		state.Relationships = relationship.NewState(inj)
+		state.NoteState = note.NewState(inj)
+		state.ReadState = read.NewState(s, inj)
+		state.MutedState = mute.NewState(s, inj)
+		state.EmojiState = emoji.NewState(s)
+		state.MemberState = member.NewState(s, inj)
+		state.RelationshipState = relationship.NewState(inj)
 	})
 
 	s.AddHandler(func(r *gateway.SessionsReplaceEvent) {
@@ -78,7 +78,7 @@ func (s *State) MessageMentions(msg discord.Message) bool {
 
 	// If there's guild:
 	if msg.GuildID.Valid() {
-		if mutedGuild = s.Muted.GuildSettings(msg.GuildID); mutedGuild != nil {
+		if mutedGuild = s.MutedState.GuildSettings(msg.GuildID); mutedGuild != nil {
 			// We're only checking mutes and suppressions, as channels don't
 			// have these. Whatever channels have will override guilds.
 
@@ -101,7 +101,7 @@ func (s *State) MessageMentions(msg discord.Message) bool {
 	var mentioned = messageMentions(msg, s.Ready.User.ID)
 
 	// Check channel settings. Channel settings override guilds.
-	if mutedCh := s.Muted.ChannelOverrides(msg.ChannelID); mutedCh != nil {
+	if mutedCh := s.MutedState.ChannelOverrides(msg.ChannelID); mutedCh != nil {
 		switch mutedCh.MessageNotifications {
 		case gateway.AllNotifications:
 			if mutedCh.Muted {
