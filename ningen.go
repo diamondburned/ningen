@@ -35,7 +35,7 @@ type State struct {
 func FromState(s *state.State) (*State, error) {
 	state := &State{
 		State: s,
-		initd: make(chan struct{}, 1),
+		initd: make(chan struct{}),
 	}
 
 	s.AddHandler(func(r *gateway.ReadyEvent) {
@@ -67,7 +67,7 @@ func (s *State) Open() error {
 		return err
 	}
 
-	s.initd <- struct{}{}
+	<-s.initd
 	return nil
 }
 
