@@ -115,12 +115,15 @@ func (r *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 			// If the message is ours, we should marrk it as already read, since
 			// it is registered like that on the Discord servers.
 			rs.LastMessageID = msgID
+			// Reset the mentions as well.
+			rs.MentionCount = 0
 		}
 	}
 
 	// Whether or not the message is read.
 	unread := rs.LastMessageID != msgID
 	rscp := *rs
+
 	// Force callbacks to run in a goroutine. This is because MarkRead and
 	// MarkUnread may be called by the user in their main thread, which means
 	// these callbacks may occupy the main loop. It may also run in any other
