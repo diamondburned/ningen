@@ -11,7 +11,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/ningen/handler"
+	"github.com/diamondburned/ningen/handlerrepo"
 	"github.com/pkg/errors"
 	"github.com/twmb/murmur3"
 )
@@ -65,7 +65,7 @@ type State struct {
 	SearchLimit     uint // 50
 }
 
-func NewState(state *state.State, h handler.AddHandler) *State {
+func NewState(state *state.State, h handlerrepo.AddHandler) *State {
 	s := &State{
 		state:      state,
 		maxFetched: make(map[discord.Snowflake]int),

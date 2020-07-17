@@ -8,7 +8,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/ningen/handler"
+	"github.com/diamondburned/ningen/handlerrepo"
 	"github.com/diamondburned/ningen/states/emoji"
 	"github.com/diamondburned/ningen/states/member"
 	"github.com/diamondburned/ningen/states/mute"
@@ -39,7 +39,7 @@ func FromState(s *state.State) (*State, error) {
 	}
 
 	s.AddHandler(func(r *gateway.ReadyEvent) {
-		inj := handler.NewReadyInjector(s, r)
+		inj := handlerrepo.NewReadyInjector(s, r)
 
 		state.NoteState = note.NewState(inj)
 		state.ReadState = read.NewState(s, inj)

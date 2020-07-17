@@ -7,11 +7,15 @@ import (
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/handler"
 	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/ningen/handler"
+	"github.com/diamondburned/ningen/handlerrepo"
 )
 
-type OnChange = func(ch gateway.ReadState, unread bool)
+type UpdateEvent struct {
+	gateway.ReadState
+	Unread bool
+}
 
 type State struct {
 	mutex  sync.Mutex
@@ -19,17 +23,20 @@ type State struct {
 	states map[discord.Snowflake]*gateway.ReadState
 
 	selfID    discord.Snowflake
-	onChanges []OnChange
+	onUpdates *handler.Handler
 
 	lastAck  api.Ack
 	ackMutex sync.Mutex
 }
 
-func NewState(state *state.State, r handler.AddHandler) *State {
+func NewState(state *state.State, r handlerrepo.AddHandler) *State {
 	readstate := &State{
 		state:  state,
 		states: make(map[discord.Snowflake]*gateway.ReadState),
 	}
+
+	readstate.onUpdates = handler.New()
+	readstate.onUpdates.Synchronous = true
 
 	u, err := state.Me()
 	if err != nil {
@@ -68,10 +75,10 @@ func NewState(state *state.State, r handler.AddHandler) *State {
 	return readstate
 }
 
-// OnReadChange adds a read change callback into the list. This function is not
-// thread-safe.
-func (r *State) OnChange(fn OnChange) {
-	r.onChanges = append(r.onChanges, fn)
+// OnUpdate adds a read update callback into the list. This function is
+// thread-safe. It is synchronous by default.
+func (r *State) OnUpdate(fn func(*UpdateEvent)) (rm func()) {
+	return r.onUpdates.AddHandler(fn)
 }
 
 func (r *State) FindLast(channelID discord.Snowflake) *gateway.ReadState {
@@ -122,9 +129,8 @@ func (r *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 	// Doing this helps making a consistent synchronizing behavior.
 	go func() {
 		// Announce that there is a change.
-		for _, fn := range r.onChanges {
-			fn(rscp, unread)
-		}
+		update := &UpdateEvent{rscp, unread}
+		r.onUpdates.Call(update)
 	}()
 }
 
@@ -165,10 +171,9 @@ func (r *State) markRead(chID, msgID discord.Snowflake, sendack bool) {
 	go r.ack(chID, msgID)
 
 	go func() {
-		// Announce.
-		for _, fn := range r.onChanges {
-			fn(rscp, false)
-		}
+		// Announce that there is a change.
+		update := &UpdateEvent{rscp, false}
+		r.onUpdates.Call(update)
 	}()
 }
 

@@ -5,7 +5,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/ningen/handler"
+	"github.com/diamondburned/ningen/handlerrepo"
 )
 
 type State struct {
@@ -13,7 +13,7 @@ type State struct {
 	relationships map[discord.Snowflake]discord.RelationshipType
 }
 
-func NewState(r handler.AddHandler) *State {
+func NewState(r handlerrepo.AddHandler) *State {
 	relastate := &State{
 		relationships: map[discord.Snowflake]discord.RelationshipType{},
 	}

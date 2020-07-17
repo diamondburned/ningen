@@ -1,4 +1,4 @@
-package handler
+package handlerrepo
 
 import "github.com/diamondburned/arikawa/gateway"
 

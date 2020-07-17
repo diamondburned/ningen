@@ -8,7 +8,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/ningen/handler"
+	"github.com/diamondburned/ningen/handlerrepo"
 )
 
 // State implements a queryable channel and guild mute state.
@@ -19,7 +19,7 @@ type State struct {
 	chMutes  map[discord.Snowflake]*gateway.SettingsChannelOverride // cache
 }
 
-func NewState(store state.Store, r handler.AddHandler) *State {
+func NewState(store state.Store, r handlerrepo.AddHandler) *State {
 	mutestate := &State{store: store}
 
 	r.AddHandler(func(r *gateway.ReadyEvent) {
