@@ -7,8 +7,8 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/handler"
 	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/ningen/handlerrepo"
 	"github.com/diamondburned/ningen/states/emoji"
 	"github.com/diamondburned/ningen/states/member"
 	"github.com/diamondburned/ningen/states/mute"
@@ -19,8 +19,12 @@ import (
 
 type State struct {
 	*state.State
+	*handler.Handler
 
-	initd chan struct{}
+	// handler that is given to states; always synchronous
+	prehandler *handler.Handler
+
+	initd chan struct{} // nil after Open().
 
 	// nil before Open().
 	NoteState         *note.State
@@ -34,28 +38,42 @@ type State struct {
 // FromState wraps a normal state.
 func FromState(s *state.State) (*State, error) {
 	state := &State{
-		State: s,
-		initd: make(chan struct{}),
+		State:      s,
+		Handler:    handler.New(),
+		prehandler: handler.New(),
 	}
 
-	s.AddHandler(func(r *gateway.ReadyEvent) {
-		inj := handlerrepo.NewReadyInjector(s, r)
+	// This is required to avoid data race with future handlers.
+	state.prehandler.Synchronous = true
 
-		state.NoteState = note.NewState(inj)
-		state.ReadState = read.NewState(s, inj)
-		state.MutedState = mute.NewState(s, inj)
-		state.EmojiState = emoji.NewState(s)
-		state.MemberState = member.NewState(s, inj)
-		state.RelationshipState = relationship.NewState(inj)
+	s.AddHandler(func(v interface{}) {
+		switch v := v.(type) {
+		case *gateway.ReadyEvent:
+			// Give our local states the synchronous prehandler.
+			state.NoteState = note.NewState(state.prehandler)
+			state.ReadState = read.NewState(s, state.prehandler)
+			state.MutedState = mute.NewState(s, state.prehandler)
+			state.EmojiState = emoji.NewState(s)
+			state.MemberState = member.NewState(s, state.prehandler)
+			state.RelationshipState = relationship.NewState(state.prehandler)
+
+		case *gateway.SessionsReplaceEvent:
+			if u, err := s.Me(); err == nil {
+				s.PresenceSet(0, joinSession(*u, v))
+			}
+		}
+
+		// Synchronously run the handlers that our states use.
+		state.prehandler.Call(v)
+
+		// Call the external handler after we're done. This handler is
+		// asynchronuos, or at least it should be.
+		state.Handler.Call(v)
 
 		// Send to channel that unblocks Open() so applications don't access nil
 		// states and avoid data race.
-		state.initd <- struct{}{}
-	})
-
-	s.AddHandler(func(r *gateway.SessionsReplaceEvent) {
-		if u, _ := s.Me(); u != nil {
-			s.PresenceSet(0, joinSession(*u, r))
+		if state.initd != nil {
+			close(state.initd)
 		}
 	})
 
@@ -63,11 +81,16 @@ func FromState(s *state.State) (*State, error) {
 }
 
 func (s *State) Open() error {
+	// Make the channel so the ready handler can use it.
+	s.initd = make(chan struct{})
+
 	if err := s.State.Open(); err != nil {
 		return err
 	}
 
 	<-s.initd
+	s.initd = nil // so future Ready events will never use this ch
+
 	return nil
 }
 

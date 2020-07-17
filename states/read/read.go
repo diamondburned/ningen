@@ -121,7 +121,6 @@ func (r *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 	// Whether or not the message is read.
 	unread := rs.LastMessageID != msgID
 	rscp := *rs
-
 	// Force callbacks to run in a goroutine. This is because MarkRead and
 	// MarkUnread may be called by the user in their main thread, which means
 	// these callbacks may occupy the main loop. It may also run in any other
@@ -160,15 +159,22 @@ func (r *State) markRead(chID, msgID discord.Snowflake, sendack bool) {
 	rs.LastMessageID = msgID
 	rs.MentionCount = 0
 
-	// copy
-	rscp := *rs
-
 	// log.Println("MarkRead called at", string(debug.Stack()))
 
 	// Send out Ack in the background, but only if we explicitly want to, that
-	// is, if MarkRead is called. In the event that the gateway receives an Ack,
-	// we don't want to send another one of the same.
-	go r.ack(chID, msgID)
+	// is, if MarkRead is called and sendAck is true. In the event that the
+	// gateway receives an Ack, we don't want to send another one of the same.
+	if sendack {
+		m, err := r.state.Store.Message(chID, msgID)
+		// If there is an error or there is none and we know this message isn't
+		// ours, then ack.
+		if err != nil || m.Author.ID != r.selfID {
+			go r.ack(chID, msgID)
+		}
+	}
+
+	// copy
+	rscp := *rs
 
 	go func() {
 		// Announce that there is a change.
@@ -178,15 +184,6 @@ func (r *State) markRead(chID, msgID discord.Snowflake, sendack bool) {
 }
 
 func (r *State) ack(chID, msgID discord.Snowflake) {
-	m, err := r.state.Store.Message(chID, msgID)
-	if err != nil {
-		return
-	}
-	// Check if this is our message or not. If it is, don't ack.
-	if m.Author.ID == r.selfID {
-		return
-	}
-
 	// Atomically guard the last ack struct.
 	r.ackMutex.Lock()
 	defer r.ackMutex.Unlock()
