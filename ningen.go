@@ -73,7 +73,7 @@ func FromState(s *state.State) (*State, error) {
 		// Send to channel that unblocks Open() so applications don't access nil
 		// states and avoid data race.
 		if state.initd != nil {
-			close(state.initd)
+			state.initd <- struct{}{}
 		}
 	})
 
@@ -81,8 +81,9 @@ func FromState(s *state.State) (*State, error) {
 }
 
 func (s *State) Open() error {
-	// Make the channel so the ready handler can use it.
-	s.initd = make(chan struct{})
+	// Make the channel so the ready handler can use it. This channel is
+	// 1-buffered in case the handler is faster than us.
+	s.initd = make(chan struct{}, 1)
 
 	if err := s.State.Open(); err != nil {
 		return err
