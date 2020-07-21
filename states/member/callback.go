@@ -8,9 +8,9 @@ import (
 )
 
 type (
-	OPCallback     = func(id string, l *List, guild discord.Snowflake, op gateway.GuildMemberListOp)
-	SyncCallback   = func(id string, l *List, guild discord.Snowflake)
-	MemberCallback = func(guild discord.Snowflake, member discord.Member)
+	OPCallback     = func(id string, l *List, guild discord.GuildID, op gateway.GuildMemberListOp)
+	SyncCallback   = func(id string, l *List, guild discord.GuildID)
+	MemberCallback = func(guild discord.GuildID, member discord.Member)
 )
 
 type callbacks struct {
@@ -43,7 +43,7 @@ func (c *callbacks) OnMember(fn MemberCallback) {
 	c.cbMut.Unlock()
 }
 
-func (c *callbacks) op(id string, l *List, guild discord.Snowflake, op gateway.GuildMemberListOp) {
+func (c *callbacks) op(id string, l *List, guild discord.GuildID, op gateway.GuildMemberListOp) {
 	c.cbMut.RLock()
 	defer c.cbMut.RUnlock()
 
@@ -51,7 +51,7 @@ func (c *callbacks) op(id string, l *List, guild discord.Snowflake, op gateway.G
 		fn(id, l, guild, op)
 	}
 }
-func (c *callbacks) sync(id string, l *List, guild discord.Snowflake) {
+func (c *callbacks) sync(id string, l *List, guild discord.GuildID) {
 	c.cbMut.RLock()
 	defer c.cbMut.RUnlock()
 
@@ -59,7 +59,7 @@ func (c *callbacks) sync(id string, l *List, guild discord.Snowflake) {
 		fn(id, l, guild)
 	}
 }
-func (c *callbacks) member(guild discord.Snowflake, member discord.Member) {
+func (c *callbacks) member(guild discord.GuildID, member discord.Member) {
 	c.cbMut.RLock()
 	defer c.cbMut.RUnlock()
 

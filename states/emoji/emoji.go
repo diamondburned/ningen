@@ -24,7 +24,7 @@ func NewState(store state.Store) *State {
 }
 
 // Get returns all emojis if the user has Nitro, else only images.
-func (s *State) Get(guildID discord.Snowflake) ([]Guild, error) {
+func (s *State) Get(guildID discord.GuildID) ([]Guild, error) {
 	u, err := s.store.Me()
 	if err == nil && u.Nitro != discord.NoUserNitro {
 		return s.allEmojis(guildID)
@@ -66,7 +66,7 @@ func (s *State) Get(guildID discord.Snowflake) ([]Guild, error) {
 	}}, nil
 }
 
-func (s *State) allEmojis(firstGuild discord.Snowflake) ([]Guild, error) {
+func (s *State) allEmojis(firstGuild discord.GuildID) ([]Guild, error) {
 	// User has Nitro, grab all emojis.
 	guilds, err := s.store.Guilds()
 	if err != nil {

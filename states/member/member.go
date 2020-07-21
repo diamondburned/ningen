@@ -53,7 +53,7 @@ type State struct {
 	hashCache sync.Map // channelID -> string
 
 	maxFetchMu sync.Mutex
-	maxFetched map[discord.Snowflake]int
+	maxFetched map[discord.ChannelID]int
 
 	callbacks // OnOP and OnSync
 
@@ -68,7 +68,7 @@ type State struct {
 func NewState(state *state.State, h handlerrepo.AddHandler) *State {
 	s := &State{
 		state:      state,
-		maxFetched: make(map[discord.Snowflake]int),
+		maxFetched: make(map[discord.ChannelID]int),
 		OnError: func(err error) {
 			log.Println("Members list error:", err)
 		},
@@ -86,7 +86,7 @@ type Guild struct {
 
 	// map to keep track of members being requested, which allows duplicate
 	// calls.
-	reqing map[discord.Snowflake]struct{}
+	reqing map[discord.UserID]struct{}
 
 	// last SearchMember call.
 	lastreq time.Time
@@ -103,7 +103,7 @@ type Guild struct {
 // command is sent to the gateway.
 //
 // The gateway command will be sent asynchronously.
-func (m *State) Subscribe(guildID discord.Snowflake) {
+func (m *State) Subscribe(guildID discord.GuildID) {
 	v, _ := m.guilds.LoadOrStore(guildID, &Guild{})
 	gd := v.(*Guild)
 
@@ -134,7 +134,7 @@ func (m *State) Subscribe(guildID discord.Snowflake) {
 
 // SearchMember queries Discord for a list of members with the given query
 // string.
-func (m *State) SearchMember(guildID discord.Snowflake, query string) {
+func (m *State) SearchMember(guildID discord.GuildID, query string) {
 	v, _ := m.guilds.LoadOrStore(guildID, &Guild{})
 	gd := v.(*Guild)
 
@@ -149,7 +149,7 @@ func (m *State) SearchMember(guildID discord.Snowflake, query string) {
 
 	go func() {
 		err := m.state.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
-			GuildID:   []discord.Snowflake{guildID},
+			GuildID:   []discord.GuildID{guildID},
 			Query:     query,
 			Presences: true,
 			Limit:     m.SearchLimit,
@@ -164,7 +164,7 @@ func (m *State) SearchMember(guildID discord.Snowflake, query string) {
 // RequestMember tries to ask the gateway for a member from the ID. This method
 // will not send the command if the member is already in the state or it's
 // already being requested.
-func (m *State) RequestMember(guildID, memberID discord.Snowflake) {
+func (m *State) RequestMember(guildID discord.GuildID, memberID discord.UserID) {
 	// TODO: Maybe this is a bit excessive? Probably won't need this in most
 	// cases.
 
@@ -181,7 +181,7 @@ func (m *State) RequestMember(guildID, memberID discord.Snowflake) {
 	defer guild.mut.Unlock()
 
 	if guild.reqing == nil {
-		guild.reqing = make(map[discord.Snowflake]struct{})
+		guild.reqing = make(map[discord.UserID]struct{})
 	} else {
 		// Check if the member is already being requested.
 		if _, ok := guild.reqing[memberID]; ok {
@@ -193,8 +193,8 @@ func (m *State) RequestMember(guildID, memberID discord.Snowflake) {
 
 	go func() {
 		err := m.state.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
-			GuildID:   []discord.Snowflake{guildID},
-			UserIDs:   []discord.Snowflake{memberID},
+			GuildID:   []discord.GuildID{guildID},
+			UserIDs:   []discord.UserID{memberID},
 			Presences: true,
 		})
 
@@ -226,7 +226,7 @@ func (m *State) onMembers(c *gateway.GuildMembersChunkEvent) {
 
 		// copy the member variable.
 		mcpy := member
-		m.state.MemberSet(mcpy.User.ID, &mcpy)
+		m.state.MemberSet(c.GuildID, &mcpy)
 	}
 
 	// Release the lock early so callbacks wouldn't affect it.
@@ -240,7 +240,7 @@ func (m *State) onMembers(c *gateway.GuildMembersChunkEvent) {
 // RequestMemberList tries to ask the gateway for a chunk (or many) of the
 // members list. Chunk is an integer (0, 1, ...), which indicates the maximum
 // number of chunks from 0 that the API should return.
-func (m *State) RequestMemberList(guildID, channelID discord.Snowflake, chunk int) {
+func (m *State) RequestMemberList(guildID discord.GuildID, channelID discord.ChannelID, chunk int) {
 	// TODO: This won't be synchronized with the actual members list if we
 	// remove any of them from the list. Maybe remove the map state if possible.
 	m.maxFetchMu.Lock()
@@ -273,7 +273,7 @@ func (m *State) RequestMemberList(guildID, channelID discord.Snowflake, chunk in
 		// Subscribe.
 		err := m.state.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
 			GuildID: guildID,
-			Channels: map[discord.Snowflake][][2]int{
+			Channels: map[discord.ChannelID][][2]int{
 				channelID: chunks,
 			},
 		})
@@ -290,7 +290,7 @@ func (m *State) RequestMemberList(guildID, channelID discord.Snowflake, chunk in
 // with a nil callback.
 //
 // Reference: https://luna.gitlab.io/discord-unofficial-docs/lazy_guilds.html
-func (m *State) GetMemberList(guildID, channelID discord.Snowflake, fn func(*List)) error {
+func (m *State) GetMemberList(guildID discord.GuildID, channelID discord.ChannelID, fn func(*List)) error {
 	gv, ok := m.guilds.Load(guildID)
 	if !ok {
 		return ErrListNotFound
