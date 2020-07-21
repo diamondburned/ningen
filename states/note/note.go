@@ -10,12 +10,12 @@ import (
 
 type State struct {
 	mutex sync.RWMutex
-	notes map[discord.Snowflake]string
+	notes map[discord.UserID]string
 }
 
 func NewState(r handlerrepo.AddHandler) *State {
 	state := &State{
-		notes: map[discord.Snowflake]string{},
+		notes: map[discord.UserID]string{},
 	}
 
 	r.AddHandler(func(r *gateway.ReadyEvent) {
@@ -36,7 +36,7 @@ func NewState(r handlerrepo.AddHandler) *State {
 }
 
 // Note returns the note for the given user, or an empty string if none.
-func (s *State) Note(userID discord.Snowflake) string {
+func (s *State) Note(userID discord.UserID) string {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 

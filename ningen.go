@@ -186,7 +186,7 @@ func (s *State) MessageMentions(msg discord.Message) bool {
 	return false
 }
 
-func messageMentions(msg discord.Message, uID discord.Snowflake) bool {
+func messageMentions(msg discord.Message, uID discord.UserID) bool {
 	for _, user := range msg.Mentions {
 		if user.ID == uID {
 			return true

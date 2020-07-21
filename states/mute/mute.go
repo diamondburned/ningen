@@ -16,7 +16,7 @@ type State struct {
 	mutex    sync.RWMutex
 	store    state.Store
 	settings []gateway.UserGuildSettings
-	chMutes  map[discord.Snowflake]*gateway.SettingsChannelOverride // cache
+	chMutes  map[discord.ChannelID]*gateway.SettingsChannelOverride // cache
 }
 
 func NewState(store state.Store, r handlerrepo.AddHandler) *State {
@@ -27,7 +27,7 @@ func NewState(store state.Store, r handlerrepo.AddHandler) *State {
 		defer mutestate.mutex.Unlock()
 
 		mutestate.settings = r.UserGuildSettings
-		mutestate.chMutes = map[discord.Snowflake]*gateway.SettingsChannelOverride{}
+		mutestate.chMutes = map[discord.ChannelID]*gateway.SettingsChannelOverride{}
 	})
 
 	r.AddHandler(func(u *gateway.UserGuildSettingsUpdateEvent) {
@@ -50,7 +50,7 @@ func NewState(store state.Store, r handlerrepo.AddHandler) *State {
 }
 
 // CategoryMuted returns whether or not the channel's category is muted.
-func (m *State) Category(channelID discord.Snowflake) bool {
+func (m *State) Category(channelID discord.ChannelID) bool {
 	c, err := m.store.Channel(channelID)
 	if err != nil || !c.CategoryID.Valid() {
 		return false
@@ -60,14 +60,14 @@ func (m *State) Category(channelID discord.Snowflake) bool {
 }
 
 // Channel returns whether or not the channel is muted.
-func (m *State) Channel(channelID discord.Snowflake) bool {
+func (m *State) Channel(channelID discord.ChannelID) bool {
 	if m := m.ChannelOverrides(channelID); m != nil {
 		return m.Muted
 	}
 	return false
 }
 
-func (m *State) ChannelOverrides(channelID discord.Snowflake) *gateway.SettingsChannelOverride {
+func (m *State) ChannelOverrides(channelID discord.ChannelID) *gateway.SettingsChannelOverride {
 	m.mutex.RLock()
 	if mute, ok := m.chMutes[channelID]; ok {
 		m.mutex.RUnlock()
@@ -93,14 +93,14 @@ func (m *State) ChannelOverrides(channelID discord.Snowflake) *gateway.SettingsC
 
 // Guild returns whether or not the ping should mention. It works with @everyone
 // if everyone is true.
-func (m *State) Guild(guildID discord.Snowflake, everyone bool) bool {
+func (m *State) Guild(guildID discord.GuildID, everyone bool) bool {
 	if m := m.GuildSettings(guildID); m != nil {
 		return (!everyone && m.Muted) || (everyone && m.SupressEveryone)
 	}
 	return false
 }
 
-func (m *State) GuildSettings(guildID discord.Snowflake) *gateway.UserGuildSettings {
+func (m *State) GuildSettings(guildID discord.GuildID) *gateway.UserGuildSettings {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 

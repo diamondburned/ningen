@@ -20,9 +20,9 @@ type UpdateEvent struct {
 type State struct {
 	mutex  sync.Mutex
 	state  *state.State
-	states map[discord.Snowflake]*gateway.ReadState
+	states map[discord.ChannelID]*gateway.ReadState
 
-	selfID    discord.Snowflake
+	selfID    discord.UserID
 	onUpdates *handler.Handler
 
 	lastAck  api.Ack
@@ -32,7 +32,7 @@ type State struct {
 func NewState(state *state.State, r handlerrepo.AddHandler) *State {
 	readstate := &State{
 		state:  state,
-		states: make(map[discord.Snowflake]*gateway.ReadState),
+		states: make(map[discord.ChannelID]*gateway.ReadState),
 	}
 
 	readstate.onUpdates = handler.New()
@@ -81,7 +81,7 @@ func (r *State) OnUpdate(fn func(*UpdateEvent)) (rm func()) {
 	return r.onUpdates.AddHandler(fn)
 }
 
-func (r *State) FindLast(channelID discord.Snowflake) *gateway.ReadState {
+func (r *State) FindLast(channelID discord.ChannelID) *gateway.ReadState {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -91,7 +91,7 @@ func (r *State) FindLast(channelID discord.Snowflake) *gateway.ReadState {
 	return nil
 }
 
-func (r *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
+func (r *State) MarkUnread(chID discord.ChannelID, msgID discord.MessageID, mentions int) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -136,12 +136,12 @@ func (r *State) MarkUnread(chID, msgID discord.Snowflake, mentions int) {
 	}()
 }
 
-func (r *State) MarkRead(chID, msgID discord.Snowflake) {
+func (r *State) MarkRead(chID discord.ChannelID, msgID discord.MessageID) {
 	// send ack
 	r.markRead(chID, msgID, true)
 }
 
-func (r *State) markRead(chID, msgID discord.Snowflake, sendack bool) {
+func (r *State) markRead(chID discord.ChannelID, msgID discord.MessageID, sendack bool) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -186,7 +186,7 @@ func (r *State) markRead(chID, msgID discord.Snowflake, sendack bool) {
 	}()
 }
 
-func (r *State) ack(chID, msgID discord.Snowflake) {
+func (r *State) ack(chID discord.ChannelID, msgID discord.MessageID) {
 	// Atomically guard the last ack struct.
 	r.ackMutex.Lock()
 	defer r.ackMutex.Unlock()
