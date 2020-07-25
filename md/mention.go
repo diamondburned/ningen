@@ -74,6 +74,7 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 
 	switch string(matches[1]) {
 	case "#": // channel
+		d := discord.ChannelID(d)
 		c, err := state.Channel(d)
 		if err != nil {
 			c = &discord.Channel{
@@ -89,6 +90,7 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 		}
 
 	case "@", "@!": // user/member
+		d := discord.UserID(d)
 		var target *discord.GuildUser
 		for _, user := range msg.Mentions {
 			if user.ID == d {
@@ -116,6 +118,7 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 		}
 
 	case "@&": // role
+		d := discord.RoleID(d)
 		// Check if the role is actually mentioned.
 		for _, id := range msg.MentionRoleIDs {
 			if id == d {
@@ -143,7 +146,7 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 	return nil
 }
 
-func searchMember(state state.Store, guild, channel, user discord.Snowflake) *discord.GuildUser {
+func searchMember(state state.Store, guild discord.GuildID, channel discord.ChannelID, user discord.UserID) *discord.GuildUser {
 	// Fetch a member if the user is in a guild.
 	if guild.Valid() {
 		m, err := state.Member(guild, user)
