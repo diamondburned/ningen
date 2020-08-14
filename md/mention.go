@@ -107,7 +107,7 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 			target = searchMember(state, msg.GuildID, msg.ChannelID, d)
 
 		// If we don't have a member, then try and fetch it.
-		case target.Member == nil && msg.GuildID.Valid():
+		case target.Member == nil && msg.GuildID.IsValid():
 			target.Member, _ = state.Member(msg.GuildID, d)
 		}
 
@@ -148,7 +148,7 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 
 func searchMember(state state.Store, guild discord.GuildID, channel discord.ChannelID, user discord.UserID) *discord.GuildUser {
 	// Fetch a member if the user is in a guild.
-	if guild.Valid() {
+	if guild.IsValid() {
 		m, err := state.Member(guild, user)
 		if err == nil {
 			return &discord.GuildUser{
