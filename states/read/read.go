@@ -7,8 +7,8 @@ import (
 	"github.com/diamondburned/arikawa/api"
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/arikawa/handler"
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/arikawa/utils/handler"
 	"github.com/diamondburned/ningen/handlerrepo"
 )
 
@@ -85,7 +85,7 @@ func (r *State) FindLast(channelID discord.ChannelID) *gateway.ReadState {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	if s, ok := r.states[channelID]; ok && s.LastMessageID.Valid() {
+	if s, ok := r.states[channelID]; ok && s.LastMessageID.IsValid() {
 		return s
 	}
 	return nil
@@ -107,7 +107,7 @@ func (r *State) MarkUnread(chID discord.ChannelID, msgID discord.MessageID, ment
 
 	if ch, _ := r.state.Store.Channel(chID); ch != nil {
 		ch.LastMessageID = msgID
-		r.state.ChannelSet(ch)
+		r.state.ChannelSet(*ch)
 	}
 
 	if msg, _ := r.state.Store.Message(chID, msgID); msg != nil {

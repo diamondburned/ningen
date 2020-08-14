@@ -52,7 +52,7 @@ func NewState(store state.Store, r handlerrepo.AddHandler) *State {
 // CategoryMuted returns whether or not the channel's category is muted.
 func (m *State) Category(channelID discord.ChannelID) bool {
 	c, err := m.store.Channel(channelID)
-	if err != nil || !c.CategoryID.Valid() {
+	if err != nil || !c.CategoryID.IsValid() {
 		return false
 	}
 
@@ -95,7 +95,7 @@ func (m *State) ChannelOverrides(channelID discord.ChannelID) *gateway.SettingsC
 // if everyone is true.
 func (m *State) Guild(guildID discord.GuildID, everyone bool) bool {
 	if m := m.GuildSettings(guildID); m != nil {
-		return (!everyone && m.Muted) || (everyone && m.SupressEveryone)
+		return (!everyone && m.Muted) || (everyone && m.SuppressEveryone)
 	}
 	return false
 }

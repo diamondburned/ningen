@@ -223,10 +223,7 @@ func (m *State) onMembers(c *gateway.GuildMembersChunkEvent) {
 	// Add all members to state first.
 	for _, member := range c.Members {
 		delete(guild.reqing, member.User.ID)
-
-		// copy the member variable.
-		mcpy := member
-		m.state.MemberSet(c.GuildID, &mcpy)
+		m.state.MemberSet(c.GuildID, member)
 	}
 
 	// Release the lock early so callbacks wouldn't affect it.
@@ -421,8 +418,8 @@ func (m *State) onListUpdateState(ev *gateway.GuildMemberListUpdate) {
 		case "SYNC", "INSERT", "UPDATE":
 			for _, item := range append(op.Items, op.Item) {
 				if item.Member != nil {
-					m.state.MemberSet(ev.GuildID, &item.Member.Member)
-					m.state.PresenceSet(ev.GuildID, &item.Member.Presence)
+					m.state.MemberSet(ev.GuildID, item.Member.Member)
+					m.state.PresenceSet(ev.GuildID, item.Member.Presence)
 				}
 			}
 		case "INVALIDATE", "DELETE":

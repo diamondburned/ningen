@@ -33,7 +33,7 @@ func (s *State) Get(guildID discord.GuildID) ([]Guild, error) {
 	// User doesn't have Nitro, so only non-GIF guild emojis are available:
 
 	// If we don't have a guildID, return nothing.
-	if !guildID.Valid() {
+	if !guildID.IsValid() {
 		return nil, nil
 	}
 
@@ -89,7 +89,7 @@ func (s *State) allEmojis(firstGuild discord.GuildID) ([]Guild, error) {
 	}
 
 	// Put the searched emoji in front.
-	if firstGuild.Valid() {
+	if firstGuild.IsValid() {
 		sort.SliceStable(emojis, func(i, j int) bool {
 			return emojis[i].ID == firstGuild
 		})

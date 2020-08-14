@@ -7,8 +7,8 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/arikawa/handler"
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/arikawa/utils/handler"
 	"github.com/diamondburned/ningen/states/emoji"
 	"github.com/diamondburned/ningen/states/member"
 	"github.com/diamondburned/ningen/states/mute"
@@ -117,14 +117,14 @@ func (s *State) MessageMentions(msg discord.Message) bool {
 	var mutedGuild *gateway.UserGuildSettings
 
 	// If there's guild:
-	if msg.GuildID.Valid() {
+	if msg.GuildID.IsValid() {
 		if mutedGuild = s.MutedState.GuildSettings(msg.GuildID); mutedGuild != nil {
 			// We're only checking mutes and suppressions, as channels don't
 			// have these. Whatever channels have will override guilds.
 
 			// @everyone mentions still work if the guild is muted and @everyone
 			// is not suppressed.
-			if msg.MentionEveryone && !mutedGuild.SupressEveryone {
+			if msg.MentionEveryone && !mutedGuild.SuppressEveryone {
 				return true
 			}
 
@@ -196,7 +196,7 @@ func messageMentions(msg discord.Message, uID discord.UserID) bool {
 	return false
 }
 
-func joinSession(me discord.User, r *gateway.SessionsReplaceEvent) *discord.Presence {
+func joinSession(me discord.User, r *gateway.SessionsReplaceEvent) discord.Presence {
 	ses := *r
 
 	var game *discord.Activity
@@ -220,7 +220,7 @@ func joinSession(me discord.User, r *gateway.SessionsReplaceEvent) *discord.Pres
 		game = &activities[len(activities)-1]
 	}
 
-	return &discord.Presence{
+	return discord.Presence{
 		User:       me,
 		Game:       game,
 		Status:     status,
