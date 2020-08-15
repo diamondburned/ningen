@@ -18,6 +18,17 @@ func ListItemIsNil(it gateway.GuildMemberListOpItem) bool {
 	return it.Member == nil && it.Group == nil
 }
 
+// ListItemSeek seeks to the first non-nil item. -1 is returned if there are no
+// non-nil items.
+func ListItemSeek(items []gateway.GuildMemberListOpItem, offset int) int {
+	for i := offset; i < len(items); i++ {
+		if !ListItemIsNil(items[i]) {
+			return i
+		}
+	}
+	return -1
+}
+
 // List is the local state of the member list. The function is safe to be used
 // thread-safe.
 type List struct {
@@ -67,6 +78,21 @@ func (l *List) ViewGroups(fn func(gruops []gateway.GuildMemberListGroup)) {
 	l.mu.Lock()
 	fn(l.groups)
 	l.mu.Unlock()
+}
+
+// TotalVisible returns the total number of members visible.
+func (l *List) TotalVisible() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	// Check if we have an offline group.
+	for _, group := range l.groups {
+		if group.ID == "offline" {
+			return l.memberCount
+		}
+	}
+	// Else, we should only show the onlines.
+	return l.onlineCount
 }
 
 // MemberCount returns the total number of members.

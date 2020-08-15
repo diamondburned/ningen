@@ -52,8 +52,10 @@ type State struct {
 	state  *state.State
 	guilds sync.Map // snowflake -> *Guild
 
-	maxFetchMu sync.Mutex
-	maxFetched map[discord.ChannelID]int
+	minFetchMu sync.Mutex
+	minFetched map[discord.ChannelID]int // TODO only 3 active chunks at once
+	// TODO: invalidate/unload chunks with chunk n
+	// TODO: chunk -1 unloads latest chunk
 
 	OnError func(error)
 
@@ -66,7 +68,7 @@ type State struct {
 func NewState(state *state.State, h handlerrepo.AddHandler) *State {
 	s := &State{
 		state:      state,
-		maxFetched: make(map[discord.ChannelID]int),
+		minFetched: make(map[discord.ChannelID]int),
 		OnError: func(err error) {
 			log.Println("Members list error:", err)
 		},
@@ -226,46 +228,106 @@ func (m *State) onMembers(c *gateway.GuildMembersChunkEvent) {
 	}
 }
 
-// InvalidateMemberList invalides the member list for the given channel ID.
-func (m *State) InvalidateMemberList(guildID discord.GuildID, channelID discord.ChannelID) {
-	m.maxFetchMu.Lock()
-	delete(m.maxFetched, channelID)
-	m.maxFetchMu.Unlock()
-}
+// // InvalidateMemberList invalides the member list for the given channel ID.
+// func (m *State) InvalidateMemberList(guildID discord.GuildID, channelID discord.ChannelID) {
+// 	m.maxFetchMu.Lock()
+// 	delete(m.maxFetched, channelID)
+// 	m.maxFetchMu.Unlock()
+
+// 	go func() {
+// 		err := m.state.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
+// 			GuildID: guildID,
+// 			Channels: map[discord.ChannelID][][2]int{
+// 				channelID: {{0, 0}},
+// 			},
+// 		})
+
+// 		if err != nil {
+// 			m.OnError(errors.Wrap(err, "Failed to subscribe to member list"))
+// 		}
+// 	}()
+// }
+
+// MaxMemberChunk indicates the number of chunks the member list might have
+// active at once. The 3 means that there can be 300 simultaneous active users.
+// 1 is subtracted to always keep the first chunk alive.
+const MaxMemberChunk = 3 - 1
 
 // RequestMemberList tries to ask the gateway for a chunk (or many) of the
 // members list. Chunk is an integer (0, 1, ...), which indicates the maximum
-// number of chunks from 0 that the API should return.
-func (m *State) RequestMemberList(guildID discord.GuildID, channelID discord.ChannelID, chunk int) {
+// number of chunks from 0 that the API should return. The function returns the
+// chunks to be fetched.
+//
+// Specifically, this method guarantees that the current chunk and the next
+// chunk will always be alive, as well as the first chunk.
+func (m *State) RequestMemberList(
+	guildID discord.GuildID, channelID discord.ChannelID, chunk int) [][2]int {
+
+	// Use the total to stop on max chunk.
+	var total = -1
+
+	// Get the list so we could calculate the total.
+	l, err := m.GetMemberList(guildID, channelID)
+	if err == nil {
+		total = l.TotalVisible()
+
+		// Round the total up with ceiling.
+		total = (total) / 100
+	}
+
 	// TODO: This won't be synchronized with the actual members list if we
 	// remove any of them from the list. Maybe remove the map state if possible.
-	m.maxFetchMu.Lock()
-	defer m.maxFetchMu.Unlock()
+	m.minFetchMu.Lock()
+	defer m.minFetchMu.Unlock()
 
 	// Chunk to start.
-	start, ok := m.maxFetched[channelID]
-	// If we've already had this chunk.
-	if ok && start >= chunk {
-		return
+	start, ok := m.minFetched[channelID]
+	// Check if we've already had this chunk.
+	if ok && chunk == start {
+		// We should always keep the current chunk and next chunk alive. As
+		// such, we need an equal check.
+		return nil
 	}
+
+	// Update the current chunks.
+	m.minFetched[channelID] = chunk
 
 	// Increment chunk by one, similar to how we add 1 into index for the
 	// length.
 	chunk++
 
-	// If not, update:
-	m.maxFetched[channelID] = chunk
+	// Cap chunk if we have a total.
+	if total > -1 && chunk > total {
+		chunk = total
+	}
+	// If we've reached the point where the chunks to be fetched go beyond the
+	// total, then we don't fetch anything.
+	if chunk < start {
+		return nil
+	}
+
+	// Derive the minimum chunk, if any. Skip the first chunk (0th), because
+	// we're adding that ourselves.
+	start = chunk - MaxMemberChunk
+	if start < 1 {
+		start = 1
+	}
+
+	// Always keep the first chunk alive.
+	chunks := make([][2]int, 1, chunk-start+1)
+	chunks[0] = [2]int{0, 99}
+
+	// Start from the last one fetched.
+	for i := start; i < chunk; i++ {
+		chunks = append(chunks, [2]int{
+			(i * 100),      // start: 100
+			(i * 100) + 99, // end:   199
+		})
+	}
+
+	log.Println(chunks)
 
 	go func() {
-		// If not, start from the last one fetched.
-		var chunks = make([][2]int, 0, chunk-start)
-		for i := start; i < chunk; i++ {
-			chunks = append(chunks, [2]int{
-				(i * 100),      // start: 100
-				(i * 100) + 99, // end:   199
-			})
-		}
-
 		// Subscribe.
 		err := m.state.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
 			GuildID: guildID,
@@ -278,6 +340,8 @@ func (m *State) RequestMemberList(guildID discord.GuildID, channelID discord.Cha
 			m.OnError(errors.Wrap(err, "Failed to subscribe to member list"))
 		}
 	}()
+
+	return chunks
 }
 
 // GetMemberList looks up for the member list. It returns an error if no list
@@ -297,7 +361,7 @@ func (m *State) GetMemberList(guildID discord.GuildID, channelID discord.Channel
 		return nil, errors.Wrap(err, "Failed to get channel permissions")
 	}
 
-	hv := computeListID(c.Permissions)
+	hv := ComputeListID(c.Permissions)
 
 	// Query for the *List.
 	ls, ok := guild.lists.Load(hv)
@@ -334,27 +398,27 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
 		switch op.Op {
 		case "SYNC":
 			start, end := op.Range[0], op.Range[1]
-			length := end + 1
-			growItems(&ml.items, length)
+			growItems(&ml.items, end+1)
 
-			for i := 0; i < length-start && i < len(op.Items); i++ {
+			for i := 0; i < len(op.Items); i++ {
 				ml.items[start+i] = op.Items[i]
 			}
 
 			continue
 
 		case "INVALIDATE":
-			// TODO
-			log.Println("Ningen: unknown OP INVALIDATE (may crash, please report):", op.Range)
-
 			start, end := op.Range[0], op.Range[1]
 			// Copy the old items into the Items field for future uses in other
 			// handlers.
 			op.Items = append([]gateway.GuildMemberListOpItem{}, ml.items[start:end]...)
 			ev.Ops[i] = op
 
-			// Slice the list away.
-			ml.items = append(ml.items[:start], ml.items[end:]...)
+			log.Println("Invalidating", start, end)
+
+			// Nullify the to-be-invalidated chunks.
+			for i := start; i < end && i < len(ml.items); i++ {
+				ml.items[i] = gateway.GuildMemberListOpItem{}
+			}
 
 			continue
 		}
@@ -430,7 +494,7 @@ func growItems(items *[]gateway.GuildMemberListOpItem, maxLen int) {
 	*items = append(cpy, make([]gateway.GuildMemberListOpItem, delta)...)
 }
 
-func computeListID(overrides []discord.Overwrite) string {
+func ComputeListID(overrides []discord.Overwrite) string {
 	var allows, denies []discord.Snowflake
 
 	for _, perm := range overrides {
