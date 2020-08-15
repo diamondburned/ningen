@@ -52,7 +52,8 @@ func (l *List) GuildID() discord.GuildID {
 }
 
 // ViewItems acquires the list's mutex and views the current items. The function
-// must not mutate nor reference the slice nor any of its items.
+// must not mutate nor reference the slice nor any of its items. The given
+// callback must not call any other method except for ID and GuildID.
 func (l *List) ViewItems(fn func(items []gateway.GuildMemberListOpItem)) {
 	l.mu.Lock()
 	fn(l.items)
@@ -60,7 +61,8 @@ func (l *List) ViewItems(fn func(items []gateway.GuildMemberListOpItem)) {
 }
 
 // ViewGroups acquires the list's mutex and views the current groups. The
-// function must not mutate nor reference the slice nor any of its items.
+// function must not mutate nor reference the slice nor any of its items. The
+// given callback must not call any other method except for ID and GuildID.
 func (l *List) ViewGroups(fn func(gruops []gateway.GuildMemberListGroup)) {
 	l.mu.Lock()
 	fn(l.groups)
