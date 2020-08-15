@@ -44,6 +44,8 @@ var (
 // channels typically have its own member list, this might be pretty hefty on
 // memory.
 //
+// With ningen's default handler,
+//
 // For reference, go to
 // https://luna.gitlab.io/discord-unofficial-docs/lazy_guilds.html.
 type State struct {
@@ -328,7 +330,7 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
 	ml.onlineCount = int(ev.OnlineCount)
 	ml.groups = ev.Groups
 
-	for _, op := range ev.Ops {
+	for i, op := range ev.Ops {
 		switch op.Op {
 		case "SYNC":
 			start, end := op.Range[0], op.Range[1]
@@ -345,10 +347,14 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
 			// TODO
 			log.Println("Ningen: unknown OP INVALIDATE (may crash, please report):", op.Range)
 
-			// start, end := op.Range[0], op.Range[1]
-			// for i := start; i < end && i < len(ml.items); i++ {
-			// 	ml.items[i] = gateway.GuildMemberListOpItem{}
-			// }
+			start, end := op.Range[0], op.Range[1]
+			// Copy the old items into the Items field for future uses in other
+			// handlers.
+			op.Items = append([]gateway.GuildMemberListOpItem{}, ml.items[start:end]...)
+			ev.Ops[i] = op
+
+			// Slice the list away.
+			ml.items = append(ml.items[:start], ml.items[end:]...)
 
 			continue
 		}
@@ -386,6 +392,8 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
 			ml.items = append(ml.items[:i], ml.items[i+1:]...)
 		}
 	}
+
+	// TODO: this cleanup is probably redundant.
 
 	// Clean up.
 	var filledLen = len(ml.items)

@@ -24,6 +24,8 @@ type State struct {
 	// handler that is given to states; always synchronous
 	prehandler *handler.Handler
 
+	// handler that users can call
+
 	initd chan struct{} // nil after Open().
 
 	// nil before Open().
