@@ -253,6 +253,20 @@ func (m *State) onMembers(c *gateway.GuildMembersChunkEvent) {
 // 1 is subtracted to always keep the first chunk alive.
 const MaxMemberChunk = 3 - 1
 
+// GetMemberListChunk returns the current member list chunk. It returns -1 if
+// there is none.
+func (m *State) GetMemberListChunk(guildID discord.GuildID, channelID discord.ChannelID) int {
+	m.minFetchMu.Lock()
+	defer m.minFetchMu.Unlock()
+
+	ck, ok := m.minFetched[channelID]
+	if !ok {
+		return -1
+	}
+
+	return ck
+}
+
 // RequestMemberList tries to ask the gateway for a chunk (or many) of the
 // members list. Chunk is an integer (0, 1, ...), which indicates the maximum
 // number of chunks from 0 that the API should return. The function returns the
@@ -324,8 +338,6 @@ func (m *State) RequestMemberList(
 			(i * 100) + 99, // end:   199
 		})
 	}
-
-	log.Println(chunks)
 
 	go func() {
 		// Subscribe.
@@ -413,8 +425,6 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
 			op.Items = append([]gateway.GuildMemberListOpItem{}, ml.items[start:end]...)
 			ev.Ops[i] = op
 
-			log.Println("Invalidating", start, end)
-
 			// Nullify the to-be-invalidated chunks.
 			for i := start; i < end && i < len(ml.items); i++ {
 				ml.items[i] = gateway.GuildMemberListOpItem{}
@@ -456,8 +466,6 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
 			ml.items = append(ml.items[:i], ml.items[i+1:]...)
 		}
 	}
-
-	// TODO: this cleanup is probably redundant.
 
 	// Clean up.
 	var filledLen = len(ml.items)
