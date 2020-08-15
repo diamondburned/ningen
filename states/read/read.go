@@ -38,17 +38,11 @@ func NewState(state *state.State, r handlerrepo.AddHandler) *State {
 	readstate.onUpdates = handler.New()
 	readstate.onUpdates.Synchronous = true
 
-	u, err := state.Me()
-	if err != nil {
-		// TODO: remove panic?
-		panic("Failed to get current user's ID: " + err.Error())
-	}
-
-	readstate.selfID = u.ID
-
 	r.AddHandler(func(r *gateway.ReadyEvent) {
 		readstate.mutex.Lock()
 		defer readstate.mutex.Unlock()
+
+		readstate.selfID = r.User.ID
 
 		for i, rs := range r.ReadState {
 			readstate.states[rs.ChannelID] = &r.ReadState[i]

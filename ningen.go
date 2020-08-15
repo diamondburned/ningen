@@ -46,17 +46,16 @@ func FromState(s *state.State) (*State, error) {
 	// This is required to avoid data race with future handlers.
 	state.prehandler.Synchronous = true
 
+	// Give our local states the synchronous prehandler.
+	state.NoteState = note.NewState(state.prehandler)
+	state.ReadState = read.NewState(s, state.prehandler)
+	state.MutedState = mute.NewState(s, state.prehandler)
+	state.EmojiState = emoji.NewState(s)
+	state.MemberState = member.NewState(s, state.prehandler)
+	state.RelationshipState = relationship.NewState(state.prehandler)
+
 	s.AddHandler(func(v interface{}) {
 		switch v := v.(type) {
-		case *gateway.ReadyEvent:
-			// Give our local states the synchronous prehandler.
-			state.NoteState = note.NewState(state.prehandler)
-			state.ReadState = read.NewState(s, state.prehandler)
-			state.MutedState = mute.NewState(s, state.prehandler)
-			state.EmojiState = emoji.NewState(s)
-			state.MemberState = member.NewState(s, state.prehandler)
-			state.RelationshipState = relationship.NewState(state.prehandler)
-
 		case *gateway.SessionsReplaceEvent:
 			if u, err := s.Me(); err == nil {
 				s.PresenceSet(0, joinSession(*u, v))

@@ -50,12 +50,8 @@ type State struct {
 	state  *state.State
 	guilds sync.Map // snowflake -> *Guild
 
-	hashCache sync.Map // channelID -> string
-
 	maxFetchMu sync.Mutex
 	maxFetched map[discord.ChannelID]int
-
-	callbacks // OnOP and OnSync
 
 	OnError func(error)
 
@@ -219,19 +215,20 @@ func (m *State) onMembers(c *gateway.GuildMembersChunkEvent) {
 	guild := v.(*Guild)
 
 	guild.mut.Lock()
+	defer guild.mut.Unlock()
 
 	// Add all members to state first.
 	for _, member := range c.Members {
 		delete(guild.reqing, member.User.ID)
 		m.state.MemberSet(c.GuildID, member)
 	}
+}
 
-	// Release the lock early so callbacks wouldn't affect it.
-	guild.mut.Unlock()
-
-	for _, member := range c.Members {
-		m.callbacks.member(c.GuildID, member)
-	}
+// InvalidateMemberList invalides the member list for the given channel ID.
+func (m *State) InvalidateMemberList(guildID discord.GuildID, channelID discord.ChannelID) {
+	m.maxFetchMu.Lock()
+	delete(m.maxFetched, channelID)
+	m.maxFetchMu.Unlock()
 }
 
 // RequestMemberList tries to ask the gateway for a chunk (or many) of the
@@ -282,48 +279,31 @@ func (m *State) RequestMemberList(guildID discord.GuildID, channelID discord.Cha
 }
 
 // GetMemberList looks up for the member list. It returns an error if no list
-// is found. The callback will be called with the mutex locked to prevent race
-// conditions. The function can be used to check if the list is there or not
-// with a nil callback.
+// is found.
 //
 // Reference: https://luna.gitlab.io/discord-unofficial-docs/lazy_guilds.html
-func (m *State) GetMemberList(guildID discord.GuildID, channelID discord.ChannelID, fn func(*List)) error {
+func (m *State) GetMemberList(guildID discord.GuildID, channelID discord.ChannelID) (*List, error) {
 	gv, ok := m.guilds.Load(guildID)
 	if !ok {
-		return ErrListNotFound
+		return nil, ErrListNotFound
 	}
 	guild := gv.(*Guild)
 
 	// Compute Discord's magical member list ID thing.
-	hv, ok := m.hashCache.Load(channelID)
-	if !ok {
-		c, err := m.state.Channel(channelID)
-		if err != nil {
-			return errors.Wrap(err, "Failed to get channel permissions")
-		}
-
-		hv = computeListID(c.Permissions)
-		m.hashCache.Store(channelID, hv)
+	c, err := m.state.Channel(channelID)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to get channel permissions")
 	}
+
+	hv := computeListID(c.Permissions)
 
 	// Query for the *List.
 	ls, ok := guild.lists.Load(hv)
 	if !ok {
-		return errors.New("List not found.")
+		return nil, ErrListNotFound
 	}
 
-	// Allow nil callback.
-	if fn == nil {
-		return nil
-	}
-
-	list := ls.(*List)
-
-	list.mu.Lock()
-	fn(list)
-	list.mu.Unlock()
-
-	return nil
+	return ls.(*List), nil
 }
 
 // onListUpdate is called a bit after RequestGuildMembers if the Channels field
@@ -332,36 +312,44 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
 	gv, _ := m.guilds.LoadOrStore(ev.GuildID, &Guild{})
 	guild := gv.(*Guild)
 
-	v, _ := guild.lists.LoadOrStore(ev.ID, &List{})
-	ml := v.(*List)
+	var ml *List
+
+	if v, ok := guild.lists.Load(ev.ID); ok {
+		ml = v.(*List)
+	} else {
+		ml = NewList(ev.ID, ev.GuildID)
+		guild.lists.Store(ev.ID, ml)
+	}
 
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
 
-	ml.MemberCount = ev.MemberCount
-	ml.OnlineCount = ev.OnlineCount
-	ml.Groups = ev.Groups
-
-	synced := false
+	ml.memberCount = int(ev.MemberCount)
+	ml.onlineCount = int(ev.OnlineCount)
+	ml.groups = ev.Groups
 
 	for _, op := range ev.Ops {
 		switch op.Op {
 		case "SYNC":
 			start, end := op.Range[0], op.Range[1]
 			length := end + 1
-			growItems(&ml.Items, length)
+			growItems(&ml.items, length)
 
 			for i := 0; i < length-start && i < len(op.Items); i++ {
-				ml.Items[start+i] = &op.Items[i]
+				ml.items[start+i] = op.Items[i]
 			}
-			synced = true
+
 			continue
 
 		case "INVALIDATE":
-			start, end := op.Range[0], op.Range[1]
-			for i := start; i < end && i < len(ml.Items); i++ {
-				ml.Items[i] = nil
-			}
+			// TODO
+			log.Println("Ningen: unknown OP INVALIDATE (may crash, please report):", op.Range)
+
+			// start, end := op.Range[0], op.Range[1]
+			// for i := start; i < end && i < len(ml.items); i++ {
+			// 	ml.items[i] = gateway.GuildMemberListOpItem{}
+			// }
+
 			continue
 		}
 
@@ -369,8 +357,8 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
 		i := op.Index
 
 		// Bounds check
-		if len(ml.Items) > 0 && i != 0 {
-			var length = len(ml.Items)
+		if len(ml.items) > 0 && i != 0 {
+			var length = len(ml.items)
 			if op.Op == "INSERT" {
 				length++
 			}
@@ -378,7 +366,7 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
 			if length <= i {
 				m.OnError(fmt.Errorf(
 					"Member %s: index out of range: len(ml.Items)=%d <= op.Index=%d\n",
-					op.Op, len(ml.Items), i,
+					op.Op, len(ml.items), i,
 				))
 				continue
 			}
@@ -387,27 +375,26 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
 		// https://luna.gitlab.io/discord-unofficial-docs/lazy_guilds.html#operator
 		switch op.Op {
 		case "INSERT":
-			ml.Items = append(ml.Items, nil)
-			copy(ml.Items[i+1:], ml.Items[i:])
-			ml.Items[i] = &op.Item
+			ml.items = append(ml.items, gateway.GuildMemberListOpItem{})
+			copy(ml.items[i+1:], ml.items[i:])
+			ml.items[i] = op.Item
 
 		case "UPDATE":
-			ml.Items[i] = &op.Item
+			ml.items[i] = op.Item
 
 		case "DELETE":
-			if i < len(ml.Items)-1 {
-				copy(ml.Items[i:], ml.Items[i+1:])
-			}
-			ml.Items[len(ml.Items)-1] = nil
-			ml.Items = ml.Items[:len(ml.Items)-1]
+			ml.items = append(ml.items[:i], ml.items[i+1:]...)
 		}
-
-		m.op(ev.ID, ml, ev.GuildID, op)
 	}
 
-	if synced {
-		m.sync(ev.ID, ml, ev.GuildID)
+	// Clean up.
+	var filledLen = len(ml.items)
+	// Iterate until we reach the end of slice or ListItemIsNil returns false.
+	for i := filledLen - 1; i >= 0 && ListItemIsNil(ml.items[i]); i-- {
+		filledLen = i
 	}
+
+	ml.items = ml.items[:filledLen]
 }
 
 // onListUpdateState is called when onListUpdate is called, but this one updates
@@ -422,23 +409,17 @@ func (m *State) onListUpdateState(ev *gateway.GuildMemberListUpdate) {
 					m.state.PresenceSet(ev.GuildID, item.Member.Presence)
 				}
 			}
-		case "INVALIDATE", "DELETE":
-			for _, item := range append(op.Items, op.Item) {
-				if item.Member != nil {
-					m.state.MemberRemove(ev.GuildID, item.Member.Member.User.ID)
-					m.state.PresenceRemove(ev.GuildID, item.Member.Member.User.ID)
-				}
-			}
 		}
 	}
 }
 
-func growItems(items *[]*gateway.GuildMemberListOpItem, maxLen int) {
-	if len(*items) >= maxLen {
+func growItems(items *[]gateway.GuildMemberListOpItem, maxLen int) {
+	cpy := *items
+	if len(cpy) >= maxLen {
 		return
 	}
-	delta := maxLen - len(*items)
-	*items = append(*items, make([]*gateway.GuildMemberListOpItem, delta)...)
+	delta := maxLen - len(cpy)
+	*items = append(cpy, make([]gateway.GuildMemberListOpItem, delta)...)
 }
 
 func computeListID(overrides []discord.Overwrite) string {
