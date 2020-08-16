@@ -434,19 +434,19 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
 		}
 
 		// https://github.com/golang/go/wiki/SliceTricks
-		i := op.Index
+		oi := op.Index
 
 		// Bounds check
-		if len(ml.items) > 0 && i != 0 {
+		if len(ml.items) > 0 && oi != 0 {
 			var length = len(ml.items)
 			if op.Op == "INSERT" {
 				length++
 			}
 
-			if length <= i {
+			if length <= oi {
 				m.OnError(fmt.Errorf(
 					"Member %s: index out of range: len(ml.Items)=%d <= op.Index=%d\n",
-					op.Op, len(ml.items), i,
+					op.Op, len(ml.items), oi,
 				))
 				continue
 			}
@@ -456,18 +456,18 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
 		switch op.Op {
 		case "INSERT":
 			ml.items = append(ml.items, gateway.GuildMemberListOpItem{})
-			copy(ml.items[i+1:], ml.items[i:])
-			ml.items[i] = op.Item
+			copy(ml.items[oi+1:], ml.items[oi:])
+			ml.items[oi] = op.Item
 
 		case "UPDATE":
-			ml.items[i] = op.Item
+			ml.items[oi] = op.Item
 
 		case "DELETE":
 			// Copy the old item into the Items field for future uses.
-			op.Item = ml.items[i]
-			ev.Ops[i] = op
+			op.Item = ml.items[oi]
+			ev.Ops[oi] = op
 			// Actually delete the item.
-			ml.items = append(ml.items[:i], ml.items[i+1:]...)
+			ml.items = append(ml.items[:oi], ml.items[oi+1:]...)
 		}
 	}
 
