@@ -53,9 +53,7 @@ type State struct {
 	guilds sync.Map // snowflake -> *Guild
 
 	minFetchMu sync.Mutex
-	minFetched map[discord.ChannelID]int // TODO only 3 active chunks at once
-	// TODO: invalidate/unload chunks with chunk n
-	// TODO: chunk -1 unloads latest chunk
+	minFetched map[discord.ChannelID]int
 
 	OnError func(error)
 
@@ -96,6 +94,12 @@ type Guild struct {
 
 	// not mutex guarded
 	lists sync.Map // string -> *List
+
+	// different mutex
+	subMutex sync.Mutex
+
+	// map to keep track of subscribed channels
+	subChannels map[discord.ChannelID][][2]int
 }
 
 // Subscribe subscribes the guild to typing events and activities. Callers cal
@@ -267,6 +271,25 @@ func (m *State) GetMemberListChunk(guildID discord.GuildID, channelID discord.Ch
 	return ck
 }
 
+var firstChunk = [][2]int{{0, 99}}
+
+// chunkEq compares the two chunks.
+func chunkEq(chk1, chk2 [][2]int) bool {
+	if len(chk1) != len(chk2) {
+		return false
+	}
+
+	for i := 0; i < 2; i++ {
+		for j := range chk1 {
+			if chk1[j][i] != chk2[j][i] {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
 // RequestMemberList tries to ask the gateway for a chunk (or many) of the
 // members list. Chunk is an integer (0, 1, ...), which indicates the maximum
 // number of chunks from 0 that the API should return. The function returns the
@@ -340,12 +363,34 @@ func (m *State) RequestMemberList(
 	}
 
 	go func() {
+		gv, _ := m.guilds.LoadOrStore(guildID, &Guild{})
+		guild := gv.(*Guild)
+
+		guild.subMutex.Lock()
+		defer guild.subMutex.Unlock()
+
+		if guild.subChannels == nil {
+			guild.subChannels = make(map[discord.ChannelID][][2]int, 1)
+		}
+
+		// If we're already in the chunk and have fetched everything already,
+		// then we can exit.
+		if fetched, ok := guild.subChannels[channelID]; ok && chunkEq(fetched, chunks) {
+			return
+		}
+
+		for id := range guild.subChannels {
+			// Reset the chunks.
+			guild.subChannels[id] = firstChunk
+		}
+
+		// Set this channel's chunk to be different.
+		guild.subChannels[channelID] = chunks
+
 		// Subscribe.
 		err := m.state.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
-			GuildID: guildID,
-			Channels: map[discord.ChannelID][][2]int{
-				channelID: chunks,
-			},
+			GuildID:  guildID,
+			Channels: guild.subChannels,
 		})
 
 		if err != nil {
@@ -361,12 +406,6 @@ func (m *State) RequestMemberList(
 //
 // Reference: https://luna.gitlab.io/discord-unofficial-docs/lazy_guilds.html
 func (m *State) GetMemberList(guildID discord.GuildID, channelID discord.ChannelID) (*List, error) {
-	gv, ok := m.guilds.Load(guildID)
-	if !ok {
-		return nil, ErrListNotFound
-	}
-	guild := gv.(*Guild)
-
 	// Compute Discord's magical member list ID thing.
 	c, err := m.state.Channel(channelID)
 	if err != nil {
@@ -375,8 +414,19 @@ func (m *State) GetMemberList(guildID discord.GuildID, channelID discord.Channel
 
 	hv := ComputeListID(c.Permissions)
 
+	return m.GetMemberListDirect(guildID, hv)
+}
+
+// GetMemberListDirect gets the guild's member list directly from the list's ID.
+func (m *State) GetMemberListDirect(guildID discord.GuildID, id string) (*List, error) {
+	gv, ok := m.guilds.Load(guildID)
+	if !ok {
+		return nil, ErrListNotFound
+	}
+	guild := gv.(*Guild)
+
 	// Query for the *List.
-	ls, ok := guild.lists.Load(hv)
+	ls, ok := guild.lists.Load(id)
 	if !ok {
 		return nil, ErrListNotFound
 	}
