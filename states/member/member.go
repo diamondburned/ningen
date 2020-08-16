@@ -464,8 +464,8 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
 
 		case "DELETE":
 			// Copy the old item into the Items field for future uses.
-			op.Item = ml.items[oi]
-			ev.Ops[oi] = op
+			op.Item = ml.items[i]
+			ev.Ops[i] = op
 			// Actually delete the item.
 			ml.items = append(ml.items[:oi], ml.items[oi+1:]...)
 		}
