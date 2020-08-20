@@ -4,6 +4,7 @@ package ningen
 
 import (
 	"sort"
+	"sync"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
@@ -17,6 +18,10 @@ import (
 	"github.com/diamondburned/ningen/states/relationship"
 )
 
+// Connected is an event that's sent on Ready or Resumed. The event arrives
+// before all ningen's handlers are called.
+type Connected struct{}
+
 type State struct {
 	*state.State
 	*handler.Handler
@@ -27,6 +32,7 @@ type State struct {
 	// handler that users can call
 
 	initd chan struct{} // nil after Open().
+	initm sync.Mutex
 
 	// nil before Open().
 	NoteState         *note.State
@@ -67,14 +73,23 @@ func FromState(s *state.State) (*State, error) {
 		// Synchronously run the handlers that our states use.
 		state.prehandler.Call(v)
 
+		switch v.(type) {
+		case *gateway.ReadyEvent, *gateway.ResumedEvent:
+			state.Handler.Call(&Connected{})
+		}
+
 		// Call the external handler after we're done. This handler is
 		// asynchronuos, or at least it should be.
 		state.Handler.Call(v)
 
+		state.initm.Lock()
+		initd := state.initd
+		state.initm.Unlock()
+
 		// Send to channel that unblocks Open() so applications don't access nil
 		// states and avoid data race.
-		if state.initd != nil {
-			state.initd <- struct{}{}
+		if initd != nil {
+			initd <- struct{}{}
 		}
 	})
 
@@ -84,11 +99,16 @@ func FromState(s *state.State) (*State, error) {
 func (s *State) Open() error {
 	// Make the channel so the ready handler can use it. This channel is
 	// 1-buffered in case the handler is faster than us.
+	s.initm.Lock()
 	s.initd = make(chan struct{}, 1)
+	s.initm.Unlock()
 
 	if err := s.State.Open(); err != nil {
 		return err
 	}
+
+	s.initm.Lock()
+	defer s.initm.Unlock()
 
 	<-s.initd
 	s.initd = nil // so future Ready events will never use this ch
