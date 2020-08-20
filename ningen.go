@@ -20,7 +20,9 @@ import (
 
 // Connected is an event that's sent on Ready or Resumed. The event arrives
 // before all ningen's handlers are called.
-type Connected struct{}
+type Connected struct {
+	Event gateway.Event
+}
 
 type State struct {
 	*state.State
@@ -75,7 +77,7 @@ func FromState(s *state.State) (*State, error) {
 
 		switch v.(type) {
 		case *gateway.ReadyEvent, *gateway.ResumedEvent:
-			state.Handler.Call(&Connected{})
+			state.Handler.Call(&Connected{v})
 		}
 
 		// Call the external handler after we're done. This handler is
@@ -108,10 +110,14 @@ func (s *State) Open() error {
 	}
 
 	s.initm.Lock()
-	defer s.initm.Unlock()
+	initd := s.initd
+	s.initm.Unlock()
 
-	<-s.initd
+	<-initd
+
+	s.initm.Lock()
 	s.initd = nil // so future Ready events will never use this ch
+	s.initm.Unlock()
 
 	return nil
 }
