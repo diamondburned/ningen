@@ -487,19 +487,17 @@ func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
 		oi := op.Index
 
 		// Bounds check
-		if len(ml.items) > 0 && oi != 0 {
-			var length = len(ml.items)
-			if op.Op == "INSERT" {
-				length++
-			}
+		var length = len(ml.items)
+		if op.Op == "INSERT" {
+			length++
+		}
 
-			if length <= oi {
-				m.OnError(fmt.Errorf(
-					"Member %s: index out of range: len(ml.Items)=%d <= op.Index=%d\n",
-					op.Op, len(ml.items), oi,
-				))
-				continue
-			}
+		if length == 0 || length <= oi {
+			m.OnError(fmt.Errorf(
+				"Member %s: index out of range: len(ml.Items)=%d <= op.Index=%d\n",
+				op.Op, len(ml.items), oi,
+			))
+			continue
 		}
 
 		// https://luna.gitlab.io/discord-unofficial-docs/lazy_guilds.html#operator
