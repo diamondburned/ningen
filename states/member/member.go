@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/arikawa/v2/state"
 	"github.com/diamondburned/ningen/handlerrepo"
 	"github.com/pkg/errors"
 	"github.com/twmb/murmur3"
@@ -173,7 +173,7 @@ func (m *State) RequestMember(guildID discord.GuildID, memberID discord.UserID) 
 	// cases.
 
 	// Check if we already have the member in the state.
-	_, err := m.state.Store.Member(guildID, memberID)
+	_, err := m.state.Cabinet.Member(guildID, memberID)
 	if err == nil {
 		return
 	}

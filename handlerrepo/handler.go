@@ -1,6 +1,6 @@
 package handlerrepo
 
-import "github.com/diamondburned/arikawa/gateway"
+import "github.com/diamondburned/arikawa/v2/gateway"
 
 // AddHandler is an interface for separate states to bind their handlers.
 type AddHandler interface {

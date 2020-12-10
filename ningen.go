@@ -6,10 +6,10 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/arikawa/utils/handler"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/arikawa/v2/state"
+	"github.com/diamondburned/arikawa/v2/utils/handler"
 	"github.com/diamondburned/ningen/states/emoji"
 	"github.com/diamondburned/ningen/states/member"
 	"github.com/diamondburned/ningen/states/mute"
@@ -59,8 +59,8 @@ func FromState(s *state.State) (*State, error) {
 	// Give our local states the synchronous prehandler.
 	state.NoteState = note.NewState(state.prehandler)
 	state.ReadState = read.NewState(s, state.prehandler)
-	state.MutedState = mute.NewState(s, state.prehandler)
-	state.EmojiState = emoji.NewState(s)
+	state.MutedState = mute.NewState(s.Cabinet, state.prehandler)
+	state.EmojiState = emoji.NewState(s.Cabinet)
 	state.MemberState = member.NewState(s, state.prehandler)
 	state.RelationshipState = relationship.NewState(state.prehandler)
 
@@ -141,7 +141,7 @@ func (s *State) MessageMentions(msg discord.Message) bool {
 		return false
 	}
 
-	var mutedGuild *gateway.UserGuildSettings
+	var mutedGuild *gateway.UserGuildSetting
 
 	// If there's guild:
 	if msg.GuildID.IsValid() {
@@ -165,7 +165,7 @@ func (s *State) MessageMentions(msg discord.Message) bool {
 	}
 
 	// Boolean on whether the message contains a self mention or not:
-	var mentioned = messageMentions(msg, s.Ready.User.ID)
+	var mentioned = messageMentions(msg, s.Ready().User.ID)
 
 	// Check channel settings. Channel settings override guilds.
 	if mutedCh := s.MutedState.ChannelOverrides(msg.ChannelID); mutedCh != nil {
@@ -223,19 +223,15 @@ func messageMentions(msg discord.Message, uID discord.UserID) bool {
 	return false
 }
 
-func joinSession(me discord.User, r *gateway.SessionsReplaceEvent) discord.Presence {
+func joinSession(me discord.User, r *gateway.SessionsReplaceEvent) gateway.Presence {
 	ses := *r
 
-	var game *discord.Activity
-	var status discord.Status
+	var status gateway.Status
 	var activities []discord.Activity
 
 	for i := len(ses) - 1; i >= 0; i-- {
 		presence := ses[i]
 
-		if presence.Game != nil {
-			game = presence.Game
-		}
 		if presence.Status != "" {
 			status = presence.Status
 		}
@@ -243,13 +239,8 @@ func joinSession(me discord.User, r *gateway.SessionsReplaceEvent) discord.Prese
 		activities = append(activities, presence.Activities...)
 	}
 
-	if game == nil && len(activities) > 0 {
-		game = &activities[len(activities)-1]
-	}
-
-	return discord.Presence{
+	return gateway.Presence{
 		User:       me,
-		Game:       game,
 		Status:     status,
 		Activities: activities,
 	}

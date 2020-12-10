@@ -3,8 +3,8 @@ package md
 import (
 	"regexp"
 
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/state/store"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
@@ -48,8 +48,8 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 	}
 
 	// Also don't parse if there's no Discord state:
-	state := getSession(pc)
-	if state == nil {
+	cab := getSession(pc)
+	if cab == nil {
 		return nil
 	}
 
@@ -75,7 +75,7 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 	switch string(matches[1]) {
 	case "#": // channel
 		d := discord.ChannelID(d)
-		c, err := state.Channel(d)
+		c, err := cab.Channel(d)
 		if err != nil {
 			c = &discord.Channel{
 				ID:   d,
@@ -104,11 +104,11 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 		// If we can't find the user in mentions, then try and fetch the user
 		// anyway, but leave mentioned at false.
 		case target == nil:
-			target = searchMember(state, msg.GuildID, msg.ChannelID, d)
+			target = searchMember(cab, msg.GuildID, msg.ChannelID, d)
 
 		// If we don't have a member, then try and fetch it.
 		case target.Member == nil && msg.GuildID.IsValid():
-			target.Member, _ = state.Member(msg.GuildID, d)
+			target.Member, _ = cab.Member(msg.GuildID, d)
 		}
 
 		return &Mention{
@@ -127,7 +127,7 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 			}
 		}
 
-		r, err := state.Role(msg.GuildID, d)
+		r, err := cab.Role(msg.GuildID, d)
 		if err != nil {
 			// Allow fallback.
 			r = &discord.Role{
@@ -146,10 +146,13 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 	return nil
 }
 
-func searchMember(state state.Store, guild discord.GuildID, channel discord.ChannelID, user discord.UserID) *discord.GuildUser {
+func searchMember(
+	cab *store.Cabinet,
+	guild discord.GuildID, channel discord.ChannelID, user discord.UserID) *discord.GuildUser {
+
 	// Fetch a member if the user is in a guild.
 	if guild.IsValid() {
-		m, err := state.Member(guild, user)
+		m, err := cab.Member(guild, user)
 		if err == nil {
 			return &discord.GuildUser{
 				User:   m.User,
@@ -159,7 +162,7 @@ func searchMember(state state.Store, guild discord.GuildID, channel discord.Chan
 	} else {
 		// Search the user if this isn't in a guild, as they might be in
 		// a DM channel.
-		c, err := state.Channel(channel)
+		c, err := cab.Channel(channel)
 		if err == nil {
 			for _, u := range c.DMRecipients {
 				if u.ID == user {
@@ -172,7 +175,7 @@ func searchMember(state state.Store, guild discord.GuildID, channel discord.Chan
 	}
 
 	// Maybe the Prensence search would give us some information?
-	p, err := state.Presence(guild, user)
+	p, err := cab.Presence(guild, user)
 	if err == nil {
 		return &discord.GuildUser{
 			User: p.User,

@@ -5,29 +5,30 @@ package mute
 import (
 	"sync"
 
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/arikawa/v2/state/store"
 	"github.com/diamondburned/ningen/handlerrepo"
 )
 
 // State implements a queryable channel and guild mute state.
 type State struct {
+	cab store.Cabinet
+
 	mutex    sync.RWMutex
-	store    state.Store
-	settings []gateway.UserGuildSettings
-	chMutes  map[discord.ChannelID]*gateway.SettingsChannelOverride // cache
+	settings []gateway.UserGuildSetting
+	chMutes  map[discord.ChannelID]*gateway.UserChannelOverride // cache
 }
 
-func NewState(store state.Store, r handlerrepo.AddHandler) *State {
-	mutestate := &State{store: store}
+func NewState(cab store.Cabinet, r handlerrepo.AddHandler) *State {
+	mutestate := &State{cab: cab}
 
 	r.AddHandler(func(r *gateway.ReadyEvent) {
 		mutestate.mutex.Lock()
 		defer mutestate.mutex.Unlock()
 
 		mutestate.settings = r.UserGuildSettings
-		mutestate.chMutes = map[discord.ChannelID]*gateway.SettingsChannelOverride{}
+		mutestate.chMutes = map[discord.ChannelID]*gateway.UserChannelOverride{}
 	})
 
 	r.AddHandler(func(u *gateway.UserGuildSettingsUpdateEvent) {
@@ -41,7 +42,7 @@ func NewState(store state.Store, r handlerrepo.AddHandler) *State {
 					delete(mutestate.chMutes, ch.ChannelID)
 				}
 
-				mutestate.settings[i] = u.UserGuildSettings
+				mutestate.settings[i] = u.UserGuildSetting
 			}
 		}
 	})
@@ -51,7 +52,7 @@ func NewState(store state.Store, r handlerrepo.AddHandler) *State {
 
 // CategoryMuted returns whether or not the channel's category is muted.
 func (m *State) Category(channelID discord.ChannelID) bool {
-	c, err := m.store.Channel(channelID)
+	c, err := m.cab.Channel(channelID)
 	if err != nil || !c.CategoryID.IsValid() {
 		return false
 	}
@@ -67,7 +68,7 @@ func (m *State) Channel(channelID discord.ChannelID) bool {
 	return false
 }
 
-func (m *State) ChannelOverrides(channelID discord.ChannelID) *gateway.SettingsChannelOverride {
+func (m *State) ChannelOverrides(channelID discord.ChannelID) *gateway.UserChannelOverride {
 	m.mutex.RLock()
 	if mute, ok := m.chMutes[channelID]; ok {
 		m.mutex.RUnlock()
@@ -100,7 +101,7 @@ func (m *State) Guild(guildID discord.GuildID, everyone bool) bool {
 	return false
 }
 
-func (m *State) GuildSettings(guildID discord.GuildID) *gateway.UserGuildSettings {
+func (m *State) GuildSettings(guildID discord.GuildID) *gateway.UserGuildSetting {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 

@@ -1,8 +1,8 @@
 package md
 
 import (
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/state/store"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
@@ -18,11 +18,11 @@ var (
 // Message as source for the ast nodes. If msg is false, then links will also be
 // parsed (accordingly to embeds and webhooks, normal messages don't have
 // links).
-func ParseWithMessage(b []byte, s state.Store, m *discord.Message, msg bool) ast.Node {
+func ParseWithMessage(b []byte, s store.Cabinet, m *discord.Message, msg bool) ast.Node {
 	// Context to pass down messages:
 	ctx := parser.NewContext()
 	ctx.Set(messageCtx, m)
-	ctx.Set(sessionCtx, s)
+	ctx.Set(sessionCtx, &s)
 
 	var inlineParsers []util.PrioritizedValue
 	if msg {
@@ -56,9 +56,9 @@ func getMessage(pc parser.Context) *discord.Message {
 	}
 	return nil
 }
-func getSession(pc parser.Context) state.Store {
+func getSession(pc parser.Context) *store.Cabinet {
 	if v := pc.Get(sessionCtx); v != nil {
-		return v.(state.Store)
+		return v.(*store.Cabinet)
 	}
 	return nil
 }

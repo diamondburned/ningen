@@ -4,11 +4,11 @@ package read
 import (
 	"sync"
 
-	"github.com/diamondburned/arikawa/api"
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/arikawa/utils/handler"
+	"github.com/diamondburned/arikawa/v2/api"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/arikawa/v2/state"
+	"github.com/diamondburned/arikawa/v2/utils/handler"
 	"github.com/diamondburned/ningen/handlerrepo"
 )
 
@@ -44,8 +44,8 @@ func NewState(state *state.State, r handlerrepo.AddHandler) *State {
 
 		readstate.selfID = r.User.ID
 
-		for i, rs := range r.ReadState {
-			readstate.states[rs.ChannelID] = &r.ReadState[i]
+		for i, rs := range r.ReadStates {
+			readstate.states[rs.ChannelID] = &r.ReadStates[i]
 		}
 	})
 
@@ -99,12 +99,12 @@ func (r *State) MarkUnread(chID discord.ChannelID, msgID discord.MessageID, ment
 
 	rs.MentionCount += mentions
 
-	if ch, _ := r.state.Store.Channel(chID); ch != nil {
+	if ch, _ := r.state.Cabinet.Channel(chID); ch != nil {
 		ch.LastMessageID = msgID
 		r.state.ChannelSet(*ch)
 	}
 
-	if msg, _ := r.state.Store.Message(chID, msgID); msg != nil {
+	if msg, _ := r.state.Cabinet.Message(chID, msgID); msg != nil {
 		if msg.Author.ID == r.selfID {
 			// If the message is ours, we should marrk it as already read, since
 			// it is registered like that on the Discord servers.
@@ -162,7 +162,7 @@ func (r *State) markRead(chID discord.ChannelID, msgID discord.MessageID, sendac
 	// is, if MarkRead is called and sendAck is true. In the event that the
 	// gateway receives an Ack, we don't want to send another one of the same.
 	if sendack {
-		m, err := r.state.Store.Message(chID, msgID)
+		m, err := r.state.Cabinet.Message(chID, msgID)
 		// If there is an error or there is none and we know this message isn't
 		// ours, then ack.
 		if err != nil || m.Author.ID != r.selfID {
