@@ -9,7 +9,7 @@ import (
 	"github.com/diamondburned/arikawa/v2/gateway"
 	"github.com/diamondburned/arikawa/v2/state"
 	"github.com/diamondburned/arikawa/v2/utils/handler"
-	"github.com/diamondburned/ningen/handlerrepo"
+	"github.com/diamondburned/ningen/v2/handlerrepo"
 )
 
 type UpdateEvent struct {

@@ -1,4 +1,4 @@
-module github.com/diamondburned/ningen
+module github.com/diamondburned/ningen/v2
 
 go 1.14
 

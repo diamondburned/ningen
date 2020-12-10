@@ -10,12 +10,12 @@ import (
 	"github.com/diamondburned/arikawa/v2/gateway"
 	"github.com/diamondburned/arikawa/v2/state"
 	"github.com/diamondburned/arikawa/v2/utils/handler"
-	"github.com/diamondburned/ningen/states/emoji"
-	"github.com/diamondburned/ningen/states/member"
-	"github.com/diamondburned/ningen/states/mute"
-	"github.com/diamondburned/ningen/states/note"
-	"github.com/diamondburned/ningen/states/read"
-	"github.com/diamondburned/ningen/states/relationship"
+	"github.com/diamondburned/ningen/v2/states/emoji"
+	"github.com/diamondburned/ningen/v2/states/member"
+	"github.com/diamondburned/ningen/v2/states/mute"
+	"github.com/diamondburned/ningen/v2/states/note"
+	"github.com/diamondburned/ningen/v2/states/read"
+	"github.com/diamondburned/ningen/v2/states/relationship"
 )
 
 // Connected is an event that's sent on Ready or Resumed. The event arrives

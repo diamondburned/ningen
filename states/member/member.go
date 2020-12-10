@@ -11,7 +11,7 @@ import (
 	"github.com/diamondburned/arikawa/v2/discord"
 	"github.com/diamondburned/arikawa/v2/gateway"
 	"github.com/diamondburned/arikawa/v2/state"
-	"github.com/diamondburned/ningen/handlerrepo"
+	"github.com/diamondburned/ningen/v2/handlerrepo"
 	"github.com/pkg/errors"
 	"github.com/twmb/murmur3"
 )

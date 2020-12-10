@@ -8,7 +8,7 @@ import (
 	"github.com/diamondburned/arikawa/v2/discord"
 	"github.com/diamondburned/arikawa/v2/gateway"
 	"github.com/diamondburned/arikawa/v2/state/store"
-	"github.com/diamondburned/ningen/handlerrepo"
+	"github.com/diamondburned/ningen/v2/handlerrepo"
 )
 
 // State implements a queryable channel and guild mute state.

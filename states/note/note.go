@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"github.com/diamondburned/arikawa/v2/discord"
-	"github.com/diamondburned/ningen/handlerrepo"
+	"github.com/diamondburned/ningen/v2/handlerrepo"
 )
 
 type State struct {
