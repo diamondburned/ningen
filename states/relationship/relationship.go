@@ -9,21 +9,26 @@ import (
 )
 
 type State struct {
-	mutex         sync.RWMutex
-	relationships map[discord.UserID]discord.RelationshipType
+	mutex           sync.RWMutex
+	relationships   []*discord.Relationship
+	relationshipIDs map[discord.UserID]*discord.Relationship
 }
 
 func NewState(r handlerrepo.AddHandler) *State {
 	relastate := &State{
-		relationships: map[discord.UserID]discord.RelationshipType{},
+		relationshipIDs: map[discord.UserID]*discord.Relationship{},
 	}
 
 	r.AddHandler(func(r *gateway.ReadyEvent) {
 		relastate.mutex.Lock()
 		defer relastate.mutex.Unlock()
 
-		for _, rl := range r.Relationships {
-			relastate.relationships[rl.UserID] = rl.Type
+		relastate.relationships = make([]*discord.Relationship, len(r.Relationships))
+
+		for i, rl := range r.Relationships {
+			rl := rl
+			relastate.relationships[i] = &rl
+			relastate.relationships[rl.UserID] = &rl
 		}
 	})
 
@@ -31,17 +36,46 @@ func NewState(r handlerrepo.AddHandler) *State {
 		relastate.mutex.Lock()
 		defer relastate.mutex.Unlock()
 
-		relastate.relationships[add.UserID] = add.Type
+		if r, ok := relastate.relationshipIDs[add.UserID]; ok {
+			*r = add.Relationship
+			return
+		}
+
+		relastate.relationships[add.UserID] = &add.Relationship
+		relastate.relationships = append(relastate.relationships, &add.Relationship)
 	})
 
 	r.AddHandler(func(rem *gateway.RelationshipRemoveEvent) {
 		relastate.mutex.Lock()
 		defer relastate.mutex.Unlock()
 
-		delete(relastate.relationships, rem.UserID)
+		for i, rela := range relastate.relationships {
+			if rela.UserID == rem.UserID {
+				relationships := relastate.relationships
+
+				relationships[i] = relationships[len(relationships)-1]
+				relationships[len(relationships)-1] = nil
+				relastate.relationships = relationships[:len(relationships)-1]
+
+				delete(relastate.relationshipIDs, rem.UserID)
+
+				return
+			}
+		}
 	})
 
 	return relastate
+}
+
+func (r *State) Each(fn func(*discord.Relationship) (stop bool)) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	for _, rela := range r.relationships {
+		if fn(rela) {
+			return
+		}
+	}
 }
 
 // Relationship returns the relationship for the given user, or 0 if there is
@@ -50,8 +84,8 @@ func (r *State) Relationship(userID discord.UserID) discord.RelationshipType {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
-	if t, ok := r.relationships[userID]; ok {
-		return t
+	if t, ok := r.relationshipIDs[userID]; ok {
+		return t.Type
 	}
 
 	return 0

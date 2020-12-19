@@ -9,6 +9,7 @@ import (
 	"github.com/diamondburned/arikawa/v2/gateway"
 	"github.com/diamondburned/arikawa/v2/state"
 	"github.com/diamondburned/arikawa/v2/utils/handler"
+	"github.com/diamondburned/ningen/v2/nstore"
 	"github.com/diamondburned/ningen/v2/states/emoji"
 	"github.com/diamondburned/ningen/v2/states/member"
 	"github.com/diamondburned/ningen/v2/states/mute"
@@ -27,14 +28,16 @@ type State struct {
 	*state.State
 	*handler.Handler
 
-	// handler that is given to states; always synchronous
-	prehandler *handler.Handler
-
-	// handler that users can call
+	// PreHandler is the handler that is given to states; it is always
+	// synchronous.
+	PreHandler *handler.Handler
 
 	initd chan struct{} // nil after Open().
 
-	// nil before Open().
+	// Custom Cabinet values.
+	PresenceState *nstore.PresenceStore
+
+	// Custom State values.
 	NoteState         *note.State
 	ReadState         *read.State
 	MutedState        *mute.State
@@ -49,19 +52,22 @@ func FromState(s *state.State) (*State, error) {
 		initd:      make(chan struct{}, 1),
 		State:      s,
 		Handler:    handler.New(),
-		prehandler: handler.New(),
+		PreHandler: handler.New(),
 	}
 
+	state.PresenceState = nstore.NewPresenceStore()
+	state.PresenceStore = state.PresenceState
+
 	// This is required to avoid data race with future handlers.
-	state.prehandler.Synchronous = true
+	state.PreHandler.Synchronous = true
 
 	// Give our local states the synchronous prehandler.
-	state.NoteState = note.NewState(state.prehandler)
-	state.ReadState = read.NewState(s, state.prehandler)
-	state.MutedState = mute.NewState(s.Cabinet, state.prehandler)
+	state.NoteState = note.NewState(state.PreHandler)
+	state.ReadState = read.NewState(s, state.PreHandler)
+	state.MutedState = mute.NewState(s.Cabinet, state.PreHandler)
 	state.EmojiState = emoji.NewState(s.Cabinet)
-	state.MemberState = member.NewState(s, state.prehandler)
-	state.RelationshipState = relationship.NewState(state.prehandler)
+	state.MemberState = member.NewState(s, state.PreHandler)
+	state.RelationshipState = relationship.NewState(state.PreHandler)
 
 	s.AddHandler(func(v interface{}) {
 		switch v := v.(type) {
@@ -72,18 +78,18 @@ func FromState(s *state.State) (*State, error) {
 		}
 
 		// Synchronously run the handlers that our states use.
-		state.prehandler.Call(v)
+		state.PreHandler.Call(v)
 
 		switch v.(type) {
 		// Might be better to trigger this on a ReadySupplemental event, as
 		// that's when things are truly done?
-		case *gateway.ReadySupplementalEvent, *gateway.ResumedEvent:
+		case *gateway.ReadyEvent, *gateway.ResumedEvent:
 			state.Handler.Call(&Connected{v})
 		}
 
 		// Only unblock if we have a ReadySupplemental to ensure that we have
 		// everything in the state.
-		if _, ok := v.(*gateway.ReadySupplementalEvent); ok {
+		if _, ok := v.(*gateway.ReadyEvent); ok {
 			// Send to channel that unblocks Open() so applications don't access nil
 			// states and avoid data race.
 			select {
@@ -118,6 +124,7 @@ func (s *State) Open() error {
 	return nil
 }
 
+// PrivateChannels returns the sorted list of private channels from the state.
 func (s *State) PrivateChannels() ([]discord.Channel, error) {
 	c, err := s.State.PrivateChannels()
 	if err != nil {
@@ -131,6 +138,7 @@ func (s *State) PrivateChannels() ([]discord.Channel, error) {
 	return c, nil
 }
 
+// MessageMentions returns true if the given message mentions the current user.
 func (s *State) MessageMentions(msg discord.Message) bool {
 	// Ignore own messages.
 	if u, err := s.Me(); err == nil && msg.Author.ID == u.ID {

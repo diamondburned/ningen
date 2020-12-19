@@ -59,6 +59,8 @@ github.com/diamondburned/arikawa/v2 v2.0.0-20201208195035-9911a3d6627a h1:OlkvTU
 github.com/diamondburned/arikawa/v2 v2.0.0-20201208195035-9911a3d6627a/go.mod h1:e+lhS20ni2luFEU06Pc8paCxgZL99/RZb77dOC82CF0=
 github.com/diamondburned/arikawa/v2 v2.0.0-20201219065126-f11edb7260b2 h1:73ukkYNYZztR3wUXzeyza6AG4zBZjA8ER6qO0QGZPPA=
 github.com/diamondburned/arikawa/v2 v2.0.0-20201219065126-f11edb7260b2/go.mod h1:e+lhS20ni2luFEU06Pc8paCxgZL99/RZb77dOC82CF0=
+github.com/diamondburned/arikawa/v2 v2.0.0-20201219075756-36c2f166becd h1:HCaw0YrlQWKTao7QE6s8tjYImZEpH7Lad85bnYel1V0=
+github.com/diamondburned/arikawa/v2 v2.0.0-20201219075756-36c2f166becd/go.mod h1:/vapSS3yfYRAt5hhgI6JiPkca+wKhgi0MdanT1dBBQY=
 github.com/envoyproxy/go-control-plane v0.9.1-0.20191026205805-5f8ba28d4473/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/go-gl/glfw v0.0.0-20190409004039-e6da0acd62b1/go.mod h1:vR7hzQXu2zJy9AVAgeJqvqgH9Q5CA+iKCZ2gyEVpxRU=
@@ -99,6 +101,8 @@ github.com/hashicorp/golang-lru v0.5.1/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ
 github.com/ianlancetaylor/demangle v0.0.0-20181102032728-5e5cf60278f6/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
 github.com/jstemmer/go-junit-report v0.0.0-20190106144839-af01ea7f8024/go.mod h1:6v2b51hI/fHJwM22ozAgKL4VKDeJcHhJFhtBdhmNjmU=
 github.com/jstemmer/go-junit-report v0.9.1/go.mod h1:Brl9GWCQeLvo8nXZwPNNblvFj/XSXhF0NWZEnDohbsk=
+github.com/kawasin73/umutex v0.2.1 h1:Onkzz3LKs1HThskVwdhhBocqdRQqwCZ03quDJzuPzPo=
+github.com/kawasin73/umutex v0.2.1/go.mod h1:A02N2muKVFMvFlp5c+hBycgdH964YtieGs+7mYB16NU=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
