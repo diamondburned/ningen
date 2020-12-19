@@ -28,7 +28,7 @@ func NewState(r handlerrepo.AddHandler) *State {
 		for i, rl := range r.Relationships {
 			rl := rl
 			relastate.relationships[i] = &rl
-			relastate.relationships[rl.UserID] = &rl
+			relastate.relationshipIDs[rl.UserID] = &rl
 		}
 	})
 
@@ -41,7 +41,7 @@ func NewState(r handlerrepo.AddHandler) *State {
 			return
 		}
 
-		relastate.relationships[add.UserID] = &add.Relationship
+		relastate.relationshipIDs[add.UserID] = &add.Relationship
 		relastate.relationships = append(relastate.relationships, &add.Relationship)
 	})
 
