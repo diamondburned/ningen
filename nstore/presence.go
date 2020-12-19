@@ -9,8 +9,7 @@ import (
 )
 
 // PresenceStore is a presence store that allows searching for a user presence
-// regardless of the guild they're from. A zero-value instance is a valid
-// instance, as long as it is given before a Ready event arrives.
+// regardless of the guild they're from.
 type PresenceStore struct {
 	mut        sync.RWMutex
 	presences  map[discord.UserID]*gateway.Presence
@@ -18,7 +17,10 @@ type PresenceStore struct {
 }
 
 func NewPresenceStore() *PresenceStore {
-	return &PresenceStore{}
+	return &PresenceStore{
+		presences:  map[discord.UserID]*gateway.Presence{},
+		userGuilds: map[discord.UserID]map[discord.GuildID]*gateway.Presence{},
+	}
 }
 
 func (pres *PresenceStore) Reset() error {
