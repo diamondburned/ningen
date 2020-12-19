@@ -132,12 +132,14 @@ func (pres *PresenceStore) PresenceSet(guild discord.GuildID, p gateway.Presence
 	guilds = map[discord.GuildID]*gateway.Presence{}
 	pres.userGuilds[p.User.ID] = guilds
 
-	// We're inserting the first item, so it's likely that the presence we
-	// already have stored is from this guild. We should update that presence,
-	// and use it for our first guild. Effectively, we're trading off a bit of
-	// correctness with sharded bots from other guilds with less memory usage.
-	*presence = p
-	guilds[guild] = presence
+	// If we're inserting a presence with the same guild ID, then we should
+	// replace the fallback one as well.
+	if presence.GuildID == guild {
+		*presence = p
+		guilds[guild] = presence
+	} else {
+		guilds[guild] = &p
+	}
 
 	return nil
 }
