@@ -57,6 +57,8 @@ github.com/diamondburned/arikawa v1.3.2 h1:ftWgP95IJGXNvCvtO5x0QBYsnFSnIBY0SvDdG
 github.com/diamondburned/arikawa v1.3.2/go.mod h1:nIhVIatzTQhPUa7NB8w4koG1RF9gYbpAr8Fj8sKq660=
 github.com/diamondburned/arikawa/v2 v2.0.0-20201208195035-9911a3d6627a h1:OlkvTUPS2p9P7De2EcbkGqIOfpyCQPpvKrH8AKPXeuM=
 github.com/diamondburned/arikawa/v2 v2.0.0-20201208195035-9911a3d6627a/go.mod h1:e+lhS20ni2luFEU06Pc8paCxgZL99/RZb77dOC82CF0=
+github.com/diamondburned/arikawa/v2 v2.0.0-20201219065126-f11edb7260b2 h1:73ukkYNYZztR3wUXzeyza6AG4zBZjA8ER6qO0QGZPPA=
+github.com/diamondburned/arikawa/v2 v2.0.0-20201219065126-f11edb7260b2/go.mod h1:e+lhS20ni2luFEU06Pc8paCxgZL99/RZb77dOC82CF0=
 github.com/envoyproxy/go-control-plane v0.9.1-0.20191026205805-5f8ba28d4473/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/go-gl/glfw v0.0.0-20190409004039-e6da0acd62b1/go.mod h1:vR7hzQXu2zJy9AVAgeJqvqgH9Q5CA+iKCZ2gyEVpxRU=
