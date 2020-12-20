@@ -4,6 +4,7 @@ package mute
 
 import (
 	"sync"
+	"time"
 
 	"github.com/diamondburned/arikawa/v2/discord"
 	"github.com/diamondburned/arikawa/v2/gateway"
@@ -16,38 +17,41 @@ type State struct {
 	cab store.Cabinet
 
 	mutex    sync.RWMutex
-	settings []gateway.UserGuildSetting
-	chMutes  map[discord.ChannelID]*gateway.UserChannelOverride // cache
+	guilds   map[discord.GuildID]*gateway.UserGuildSetting
+	channels map[discord.ChannelID]*gateway.UserChannelOverride
 }
 
 func NewState(cab store.Cabinet, r handlerrepo.AddHandler) *State {
-	mutestate := &State{cab: cab}
+	mute := &State{cab: cab}
 
 	r.AddHandler(func(r *gateway.ReadyEvent) {
-		mutestate.mutex.Lock()
-		defer mutestate.mutex.Unlock()
+		mute.mutex.Lock()
+		defer mute.mutex.Unlock()
 
-		mutestate.settings = r.UserGuildSettings
-		mutestate.chMutes = map[discord.ChannelID]*gateway.UserChannelOverride{}
-	})
+		mute.guilds = make(map[discord.GuildID]*gateway.UserGuildSetting, len(r.UserGuildSettings))
+		mute.channels = map[discord.ChannelID]*gateway.UserChannelOverride{}
 
-	r.AddHandler(func(u *gateway.UserGuildSettingsUpdateEvent) {
-		mutestate.mutex.Lock()
-		defer mutestate.mutex.Unlock()
+		for i, guild := range r.UserGuildSettings {
+			mute.guilds[guild.GuildID] = &r.UserGuildSettings[i]
 
-		for i, guild := range mutestate.settings {
-			if guild.GuildID == u.GuildID {
-				// Invalidate the channel cache first.
-				for _, ch := range guild.ChannelOverrides {
-					delete(mutestate.chMutes, ch.ChannelID)
-				}
-
-				mutestate.settings[i] = u.UserGuildSetting
+			for i, ch := range guild.ChannelOverrides {
+				mute.channels[ch.ChannelID] = &guild.ChannelOverrides[i]
 			}
 		}
 	})
 
-	return mutestate
+	r.AddHandler(func(u *gateway.UserGuildSettingsUpdateEvent) {
+		mute.mutex.Lock()
+		defer mute.mutex.Unlock()
+
+		mute.guilds[u.GuildID] = &u.UserGuildSetting
+
+		for i, ch := range u.ChannelOverrides {
+			mute.channels[ch.ChannelID] = &u.ChannelOverrides[i]
+		}
+	})
+
+	return mute
 }
 
 // CategoryMuted returns whether or not the channel's category is muted.
@@ -62,54 +66,69 @@ func (m *State) Category(channelID discord.ChannelID) bool {
 
 // Channel returns whether or not the channel is muted.
 func (m *State) Channel(channelID discord.ChannelID) bool {
-	if m := m.ChannelOverrides(channelID); m != nil {
-		return m.Muted
+	mute, ok := m.channels[channelID]
+	if !ok || muteConfigInvalid(mute.MuteConfig) {
+		return false
 	}
-	return false
+	return mute.Muted
 }
 
-func (m *State) ChannelOverrides(channelID discord.ChannelID) *gateway.UserChannelOverride {
+func (m *State) ChannelOverrides(channelID discord.ChannelID) gateway.UserChannelOverride {
 	m.mutex.RLock()
-	if mute, ok := m.chMutes[channelID]; ok {
-		m.mutex.RUnlock()
-		return mute
-	}
-	m.mutex.RUnlock()
+	defer m.mutex.RUnlock()
 
-	for i, guild := range m.settings {
-		for j, ch := range guild.ChannelOverrides {
-			if ch.ChannelID == channelID {
-				// cache
-				m.mutex.Lock()
-				m.chMutes[channelID] = &m.settings[i].ChannelOverrides[j]
-				m.mutex.Unlock()
-
-				return &ch
-			}
-		}
+	if override, ok := m.channels[channelID]; ok {
+		return *override
 	}
 
-	return nil
+	return gateway.UserChannelOverride{
+		Notifications: gateway.GuildDefaults,
+		ChannelID:     channelID,
+	}
 }
 
 // Guild returns whether or not the ping should mention. It works with @everyone
 // if everyone is true.
 func (m *State) Guild(guildID discord.GuildID, everyone bool) bool {
-	if m := m.GuildSettings(guildID); m != nil {
-		return (!everyone && m.Muted) || (everyone && m.SuppressEveryone)
+	mute, ok := m.guilds[guildID]
+	if !ok || muteConfigInvalid(mute.MuteConfig) {
+		return false
 	}
-	return false
+	return (!everyone && mute.Muted) || (everyone && mute.SuppressEveryone)
 }
 
-func (m *State) GuildSettings(guildID discord.GuildID) *gateway.UserGuildSetting {
+func (m *State) GuildSettings(guildID discord.GuildID) gateway.UserGuildSetting {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 
-	for _, guild := range m.settings {
-		if guild.GuildID == guildID {
-			return &guild // copy
+	if setting, ok := m.guilds[guildID]; ok {
+		return *setting
+	}
+
+	var noti = gateway.AllNotifications
+
+	if guild, _ := m.cab.Guild(guildID); guild != nil {
+		switch guild.Notification {
+		case discord.AllMessages:
+			noti = gateway.AllNotifications
+		case discord.OnlyMentions:
+			noti = gateway.OnlyMentions
 		}
 	}
 
-	return nil
+	return gateway.UserGuildSetting{
+		GuildID:       guildID,
+		Notifications: noti,
+	}
+}
+
+func muteConfigInvalid(mute *gateway.UserMuteConfig) bool {
+	// If there is no config, then it's a permanent mute.
+	if mute == nil {
+		return false
+	}
+	// Else, if the time is before now, then it's an expired mute, therefore
+	// invalid. Return true.
+	now := time.Now()
+	return mute.EndTime.Time().Before(now)
 }

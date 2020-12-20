@@ -15,56 +15,57 @@ type State struct {
 }
 
 func NewState(r handlerrepo.AddHandler) *State {
-	relastate := &State{
+	rela := &State{
 		relationshipIDs: map[discord.UserID]*discord.Relationship{},
 	}
 
 	r.AddHandler(func(r *gateway.ReadyEvent) {
-		relastate.mutex.Lock()
-		defer relastate.mutex.Unlock()
+		rela.mutex.Lock()
+		defer rela.mutex.Unlock()
 
-		relastate.relationships = make([]*discord.Relationship, len(r.Relationships))
+		rela.relationships = make([]*discord.Relationship, len(r.Relationships))
+		rela.relationshipIDs = make(map[discord.UserID]*discord.Relationship, len(r.Relationships))
 
 		for i, rl := range r.Relationships {
 			rl := rl
-			relastate.relationships[i] = &rl
-			relastate.relationshipIDs[rl.UserID] = &rl
+			rela.relationships[i] = &rl
+			rela.relationshipIDs[rl.UserID] = &rl
 		}
 	})
 
 	r.AddHandler(func(add *gateway.RelationshipAddEvent) {
-		relastate.mutex.Lock()
-		defer relastate.mutex.Unlock()
+		rela.mutex.Lock()
+		defer rela.mutex.Unlock()
 
-		if r, ok := relastate.relationshipIDs[add.UserID]; ok {
+		if r, ok := rela.relationshipIDs[add.UserID]; ok {
 			*r = add.Relationship
 			return
 		}
 
-		relastate.relationshipIDs[add.UserID] = &add.Relationship
-		relastate.relationships = append(relastate.relationships, &add.Relationship)
+		rela.relationshipIDs[add.UserID] = &add.Relationship
+		rela.relationships = append(rela.relationships, &add.Relationship)
 	})
 
 	r.AddHandler(func(rem *gateway.RelationshipRemoveEvent) {
-		relastate.mutex.Lock()
-		defer relastate.mutex.Unlock()
+		rela.mutex.Lock()
+		defer rela.mutex.Unlock()
 
-		for i, rela := range relastate.relationships {
-			if rela.UserID == rem.UserID {
-				relationships := relastate.relationships
+		for i, r := range rela.relationships {
+			if r.UserID == rem.UserID {
+				relationships := rela.relationships
 
 				relationships[i] = relationships[len(relationships)-1]
 				relationships[len(relationships)-1] = nil
-				relastate.relationships = relationships[:len(relationships)-1]
+				rela.relationships = relationships[:len(relationships)-1]
 
-				delete(relastate.relationshipIDs, rem.UserID)
+				delete(rela.relationshipIDs, rem.UserID)
 
 				return
 			}
 		}
 	})
 
-	return relastate
+	return rela
 }
 
 func (r *State) Each(fn func(*discord.Relationship) (stop bool)) {

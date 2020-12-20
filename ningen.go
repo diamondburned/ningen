@@ -149,22 +149,22 @@ func (s *State) MessageMentions(msg discord.Message) bool {
 
 	// If there's guild:
 	if msg.GuildID.IsValid() {
-		if mutedGuild = s.MutedState.GuildSettings(msg.GuildID); mutedGuild != nil {
-			// We're only checking mutes and suppressions, as channels don't
-			// have these. Whatever channels have will override guilds.
+		mutedGuild := s.MutedState.GuildSettings(msg.GuildID)
 
-			// @everyone mentions still work if the guild is muted and @everyone
-			// is not suppressed.
-			if msg.MentionEveryone && !mutedGuild.SuppressEveryone {
-				return true
-			}
+		// We're only checking mutes and suppressions, as channels don't
+		// have these. Whatever channels have will override guilds.
 
-			// TODO: roles
+		// @everyone mentions still work if the guild is muted and @everyone
+		// is not suppressed.
+		if msg.MentionEveryone && !mutedGuild.SuppressEveryone {
+			return true
+		}
 
-			// If the guild is muted of all messages:
-			if mutedGuild.Muted {
-				return false
-			}
+		// TODO: roles
+
+		// If the guild is muted of all messages:
+		if mutedGuild.Muted {
+			return false
 		}
 	}
 
@@ -172,26 +172,26 @@ func (s *State) MessageMentions(msg discord.Message) bool {
 	var mentioned = messageMentions(msg, s.Ready().User.ID)
 
 	// Check channel settings. Channel settings override guilds.
-	if mutedCh := s.MutedState.ChannelOverrides(msg.ChannelID); mutedCh != nil {
-		switch mutedCh.MessageNotifications {
-		case gateway.AllNotifications:
-			if mutedCh.Muted {
-				return false
-			}
+	mutedCh := s.MutedState.ChannelOverrides(msg.ChannelID)
 
-		case gateway.NoNotifications:
-			// If no notifications are allowed, not even mentions.
+	switch mutedCh.Notifications {
+	case gateway.AllNotifications:
+		if mutedCh.Muted {
 			return false
-
-		case gateway.OnlyMentions:
-			// If mentions are allowed. We return early because this overrides
-			// the guild settings, even if Guild wants all messages.
-			return mentioned
 		}
+
+	case gateway.NoNotifications:
+		// If no notifications are allowed, not even mentions.
+		return false
+
+	case gateway.OnlyMentions:
+		// If mentions are allowed. We return early because this overrides
+		// the guild settings, even if Guild wants all messages.
+		return mentioned
 	}
 
 	if mutedGuild != nil {
-		switch mutedGuild.MessageNotifications {
+		switch mutedGuild.Notifications {
 		case gateway.AllNotifications:
 			// If the guild is muted, but we can return early here. If we allow
 			// all notifications, we can return the opposite of muted.
