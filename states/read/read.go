@@ -114,8 +114,11 @@ func (r *State) MarkUnread(chID discord.ChannelID, msgID discord.MessageID, ment
 		}
 	}
 
-	// Whether or not the message is read.
-	unread := rs.LastMessageID != msgID
+	// The message is not read if the last read message's ID is less than the
+	// latest message's ID. We don't check for inequality since the latest
+	// message may have been deleted, leading to us trying to mark a deleted
+	// message.
+	unread := rs.LastMessageID < msgID
 	rscp := *rs
 
 	// Force callbacks to run in a goroutine. This is because MarkRead and
@@ -148,7 +151,7 @@ func (r *State) markRead(chID discord.ChannelID, msgID discord.MessageID, sendac
 	}
 
 	// If we've already marked the message as read.
-	if rs.LastMessageID == msgID {
+	if rs.LastMessageID >= msgID {
 		return
 	}
 
