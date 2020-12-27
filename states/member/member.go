@@ -137,6 +137,7 @@ func (m *State) guildState(guildID discord.GuildID, create bool) *Guild {
 	if !ok && create {
 		guild = &Guild{
 			id:          guildID,
+			lists:       map[string]*List{},
 			reqing:      map[discord.UserID]struct{}{},
 			subChannels: map[discord.ChannelID][][2]int{},
 		}
