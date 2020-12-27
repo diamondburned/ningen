@@ -96,7 +96,6 @@ func ExampleState_RequestMemberList() {
 
 		fmt.Println("Last member:", items[len(items)-1].Member.User.Username)
 	})
-
 }
 
 func TestComputeListID(t *testing.T) {

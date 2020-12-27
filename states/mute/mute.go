@@ -17,8 +17,8 @@ type State struct {
 	cab store.Cabinet
 
 	mutex    sync.RWMutex
-	guilds   map[discord.GuildID]*gateway.UserGuildSetting
-	channels map[discord.ChannelID]*gateway.UserChannelOverride
+	guilds   map[discord.GuildID]gateway.UserGuildSetting
+	channels map[discord.ChannelID]gateway.UserChannelOverride
 }
 
 func NewState(cab store.Cabinet, r handlerrepo.AddHandler) *State {
@@ -28,14 +28,14 @@ func NewState(cab store.Cabinet, r handlerrepo.AddHandler) *State {
 		mute.mutex.Lock()
 		defer mute.mutex.Unlock()
 
-		mute.guilds = make(map[discord.GuildID]*gateway.UserGuildSetting, len(r.UserGuildSettings))
-		mute.channels = map[discord.ChannelID]*gateway.UserChannelOverride{}
+		mute.guilds = make(map[discord.GuildID]gateway.UserGuildSetting, len(r.UserGuildSettings))
+		mute.channels = map[discord.ChannelID]gateway.UserChannelOverride{}
 
 		for i, guild := range r.UserGuildSettings {
-			mute.guilds[guild.GuildID] = &r.UserGuildSettings[i]
+			mute.guilds[guild.GuildID] = r.UserGuildSettings[i]
 
 			for i, ch := range guild.ChannelOverrides {
-				mute.channels[ch.ChannelID] = &guild.ChannelOverrides[i]
+				mute.channels[ch.ChannelID] = guild.ChannelOverrides[i]
 			}
 		}
 	})
@@ -44,10 +44,10 @@ func NewState(cab store.Cabinet, r handlerrepo.AddHandler) *State {
 		mute.mutex.Lock()
 		defer mute.mutex.Unlock()
 
-		mute.guilds[u.GuildID] = &u.UserGuildSetting
+		mute.guilds[u.GuildID] = u.UserGuildSetting
 
 		for i, ch := range u.ChannelOverrides {
-			mute.channels[ch.ChannelID] = &u.ChannelOverrides[i]
+			mute.channels[ch.ChannelID] = u.ChannelOverrides[i]
 		}
 	})
 
@@ -66,7 +66,10 @@ func (m *State) Category(channelID discord.ChannelID) bool {
 
 // Channel returns whether or not the channel is muted.
 func (m *State) Channel(channelID discord.ChannelID) bool {
+	m.mutex.RLock()
 	mute, ok := m.channels[channelID]
+	m.mutex.RUnlock()
+
 	if !ok || muteConfigInvalid(mute.MuteConfig) {
 		return false
 	}
@@ -75,14 +78,21 @@ func (m *State) Channel(channelID discord.ChannelID) bool {
 
 func (m *State) ChannelOverrides(channelID discord.ChannelID) gateway.UserChannelOverride {
 	m.mutex.RLock()
-	defer m.mutex.RUnlock()
+	override, ok := m.channels[channelID]
+	m.mutex.RUnlock()
 
-	if override, ok := m.channels[channelID]; ok {
-		return *override
+	if ok {
+		return override
+	}
+
+	noti := gateway.GuildDefaults
+
+	if ch, err := m.cab.Channel(channelID); err == nil {
+		noti = m.GuildSettings(ch.GuildID).Notifications
 	}
 
 	return gateway.UserChannelOverride{
-		Notifications: gateway.GuildDefaults,
+		Notifications: noti,
 		ChannelID:     channelID,
 	}
 }
@@ -90,7 +100,10 @@ func (m *State) ChannelOverrides(channelID discord.ChannelID) gateway.UserChanne
 // Guild returns whether or not the ping should mention. It works with @everyone
 // if everyone is true.
 func (m *State) Guild(guildID discord.GuildID, everyone bool) bool {
+	m.mutex.RLock()
 	mute, ok := m.guilds[guildID]
+	m.mutex.RUnlock()
+
 	if !ok || muteConfigInvalid(mute.MuteConfig) {
 		return false
 	}
@@ -99,10 +112,11 @@ func (m *State) Guild(guildID discord.GuildID, everyone bool) bool {
 
 func (m *State) GuildSettings(guildID discord.GuildID) gateway.UserGuildSetting {
 	m.mutex.RLock()
-	defer m.mutex.RUnlock()
+	setting, ok := m.guilds[guildID]
+	m.mutex.RUnlock()
 
-	if setting, ok := m.guilds[guildID]; ok {
-		return *setting
+	if ok {
+		return setting
 	}
 
 	var noti = gateway.AllNotifications

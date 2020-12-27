@@ -49,8 +49,9 @@ var (
 // For reference, go to
 // https://luna.gitlab.io/discord-unofficial-docs/lazy_guilds.html.
 type State struct {
-	state  *state.State
-	guilds sync.Map // snowflake -> *Guild
+	state   *state.State
+	guildMu sync.Mutex
+	guilds  map[discord.GuildID]*Guild // snowflake -> *Guild
 
 	minFetchMu sync.Mutex
 	minFetched map[discord.ChannelID]int
@@ -58,7 +59,7 @@ type State struct {
 	OnError func(error)
 
 	// RequestFrequency is the duration before the next SearchMember is allowed
-	// to do anything else. Default is 1s.
+	// to do anything else. Default is 600ms.
 	SearchFrequency time.Duration
 	SearchLimit     uint // 50
 }
@@ -66,21 +67,34 @@ type State struct {
 func NewState(state *state.State, h handlerrepo.AddHandler) *State {
 	s := &State{
 		state:      state,
-		minFetched: make(map[discord.ChannelID]int),
+		guilds:     map[discord.GuildID]*Guild{},
+		minFetched: map[discord.ChannelID]int{},
 		OnError: func(err error) {
 			log.Println("Members list error:", err)
 		},
-		SearchFrequency: time.Second,
+		SearchFrequency: 600 * time.Millisecond,
 		SearchLimit:     50,
 	}
 	h.AddHandler(s.onListUpdateState)
 	h.AddHandler(s.onListUpdate)
 	h.AddHandler(s.onMembers)
+	h.AddHandler(func(*gateway.ReadyEvent) {
+		s.guildMu.Lock()
+		s.minFetchMu.Lock()
+
+		// Invalidate everything.
+		s.guilds = map[discord.GuildID]*Guild{}
+		s.minFetched = map[discord.ChannelID]int{}
+
+		s.minFetchMu.Unlock()
+		s.guildMu.Unlock()
+	})
 	return s
 }
 
 type Guild struct {
 	mut sync.Mutex
+	id  discord.GuildID
 
 	// map to keep track of members being requested, which allows duplicate
 	// calls.
@@ -92,8 +106,8 @@ type Guild struct {
 	// whether or not the guild is subscribed.
 	subscribed bool
 
-	// not mutex guarded
-	lists sync.Map // string -> *List
+	listMu sync.Mutex
+	lists  map[string]*List
 
 	// different mutex
 	subMutex sync.Mutex
@@ -102,15 +116,43 @@ type Guild struct {
 	subChannels map[discord.ChannelID][][2]int
 }
 
+func (g *Guild) list(listID string, create bool) *List {
+	g.listMu.Lock()
+	defer g.listMu.Unlock()
+
+	list, ok := g.lists[listID]
+	if !ok && create {
+		list = NewList(listID, g.id)
+		g.lists[listID] = list
+	}
+
+	return list
+}
+
+func (m *State) guildState(guildID discord.GuildID, create bool) *Guild {
+	m.guildMu.Lock()
+	defer m.guildMu.Unlock()
+
+	guild, ok := m.guilds[guildID]
+	if !ok && create {
+		guild = &Guild{
+			id:          guildID,
+			reqing:      map[discord.UserID]struct{}{},
+			subChannels: map[discord.ChannelID][][2]int{},
+		}
+		m.guilds[guildID] = guild
+	}
+
+	return guild
+}
+
 // Subscribe subscribes the guild to typing events and activities. Callers cal
 // call this multiple times concurrently. The state will ensure that only one
 // command is sent to the gateway.
 //
 // The gateway command will be sent asynchronously.
 func (m *State) Subscribe(guildID discord.GuildID) {
-	v, _ := m.guilds.LoadOrStore(guildID, &Guild{})
-	gd := v.(*Guild)
-
+	gd := m.guildState(guildID, true)
 	gd.mut.Lock()
 	defer gd.mut.Unlock()
 
@@ -139,9 +181,7 @@ func (m *State) Subscribe(guildID discord.GuildID) {
 // SearchMember queries Discord for a list of members with the given query
 // string.
 func (m *State) SearchMember(guildID discord.GuildID, query string) {
-	v, _ := m.guilds.LoadOrStore(guildID, &Guild{})
-	gd := v.(*Guild)
-
+	gd := m.guildState(guildID, true)
 	gd.mut.Lock()
 	defer gd.mut.Unlock()
 
@@ -178,9 +218,7 @@ func (m *State) RequestMember(guildID discord.GuildID, memberID discord.UserID) 
 		return
 	}
 
-	v, _ := m.guilds.LoadOrStore(guildID, &Guild{})
-	guild := v.(*Guild)
-
+	guild := m.guildState(guildID, true)
 	guild.mut.Lock()
 	defer guild.mut.Unlock()
 
@@ -219,9 +257,7 @@ func (m *State) RequestMember(guildID discord.GuildID, memberID discord.UserID) 
 // onMembers is called a bit after RequestGuildMembers if the UserIDs field is
 // filled.
 func (m *State) onMembers(c *gateway.GuildMembersChunkEvent) {
-	v, _ := m.guilds.LoadOrStore(c.GuildID, &Guild{})
-	guild := v.(*Guild)
-
+	guild := m.guildState(c.GuildID, true)
 	guild.mut.Lock()
 	defer guild.mut.Unlock()
 
@@ -363,15 +399,9 @@ func (m *State) RequestMemberList(
 	}
 
 	go func() {
-		gv, _ := m.guilds.LoadOrStore(guildID, &Guild{})
-		guild := gv.(*Guild)
-
+		guild := m.guildState(guildID, true)
 		guild.subMutex.Lock()
 		defer guild.subMutex.Unlock()
-
-		if guild.subChannels == nil {
-			guild.subChannels = make(map[discord.ChannelID][][2]int, 1)
-		}
 
 		// If we're already in the chunk and have fetched everything already,
 		// then we can exit.
@@ -419,36 +449,25 @@ func (m *State) GetMemberList(guildID discord.GuildID, channelID discord.Channel
 
 // GetMemberListDirect gets the guild's member list directly from the list's ID.
 func (m *State) GetMemberListDirect(guildID discord.GuildID, id string) (*List, error) {
-	gv, ok := m.guilds.Load(guildID)
-	if !ok {
-		return nil, ErrListNotFound
-	}
-	guild := gv.(*Guild)
-
-	// Query for the *List.
-	ls, ok := guild.lists.Load(id)
-	if !ok {
+	guild := m.guildState(guildID, false)
+	if guild == nil {
 		return nil, ErrListNotFound
 	}
 
-	return ls.(*List), nil
+	list := guild.list(id, false)
+	if list == nil {
+		return nil, ErrListNotFound
+	}
+
+	return list, nil
 }
 
 // onListUpdate is called a bit after RequestGuildMembers if the Channels field
 // is filled. It handles updating the local members list state.
 func (m *State) onListUpdate(ev *gateway.GuildMemberListUpdate) {
-	gv, _ := m.guilds.LoadOrStore(ev.GuildID, &Guild{})
-	guild := gv.(*Guild)
+	guild := m.guildState(ev.GuildID, true)
 
-	var ml *List
-
-	if v, ok := guild.lists.Load(ev.ID); ok {
-		ml = v.(*List)
-	} else {
-		ml = NewList(ev.ID, ev.GuildID)
-		guild.lists.Store(ev.ID, ml)
-	}
-
+	ml := guild.list(ev.ID, true)
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
 

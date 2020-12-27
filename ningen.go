@@ -3,6 +3,7 @@
 package ningen
 
 import (
+	"log"
 	"sort"
 
 	"github.com/diamondburned/arikawa/v2/discord"
@@ -62,7 +63,7 @@ func FromState(s *state.State) (*State, error) {
 	state.PreHandler.Synchronous = true
 
 	// Give our local states the synchronous prehandler.
-	state.NoteState = note.NewState(state.PreHandler)
+	state.NoteState = note.NewState(s, state.PreHandler)
 	state.ReadState = read.NewState(s, state.PreHandler)
 	state.MutedState = mute.NewState(s.Cabinet, state.PreHandler)
 	state.EmojiState = emoji.NewState(s.Cabinet)
@@ -84,14 +85,15 @@ func FromState(s *state.State) (*State, error) {
 		// Might be better to trigger this on a ReadySupplemental event, as
 		// that's when things are truly done?
 		case *gateway.ReadyEvent, *gateway.ResumedEvent:
+			log.Println("[ningen] Ready or Resumed received")
 			state.Handler.Call(&Connected{v})
 		}
 
 		// Only unblock if we have a ReadySupplemental to ensure that we have
 		// everything in the state.
 		if _, ok := v.(*gateway.ReadyEvent); ok {
-			// Send to channel that unblocks Open() so applications don't access nil
-			// states and avoid data race.
+			// Send to channel that unblocks Open() so applications don't access
+			// nil states and avoid data race.
 			select {
 			case state.initd <- struct{}{}:
 				// Since this channel is one-buffered, we can do this.
