@@ -174,6 +174,11 @@ func (m *State) Subscribe(guildID discord.GuildID) {
 
 		if err != nil {
 			m.OnError(errors.Wrap(err, "Failed to subscribe guild"))
+
+			gd.mut.Lock()
+			gd.subscribed = false
+			gd.mut.Unlock()
+
 			return
 		}
 	}()
@@ -334,6 +339,9 @@ func chunkEq(chk1, chk2 [][2]int) bool {
 //
 // Specifically, this method guarantees that the current chunk and the next
 // chunk will always be alive, as well as the first chunk.
+//
+// If the given guild is not subscribed already, then it will subscribe
+// automatically.
 func (m *State) RequestMemberList(
 	guildID discord.GuildID, channelID discord.ChannelID, chunk int) [][2]int {
 
@@ -402,11 +410,11 @@ func (m *State) RequestMemberList(
 	go func() {
 		guild := m.guildState(guildID, true)
 		guild.subMutex.Lock()
-		defer guild.subMutex.Unlock()
 
 		// If we're already in the chunk and have fetched everything already,
 		// then we can exit.
 		if fetched, ok := guild.subChannels[channelID]; ok && chunkEq(fetched, chunks) {
+			guild.subMutex.Unlock()
 			return
 		}
 
@@ -418,10 +426,15 @@ func (m *State) RequestMemberList(
 		// Set this channel's chunk to be different.
 		guild.subChannels[channelID] = chunks
 
+		guild.subscribed = true
+		guild.subMutex.Unlock() // Do not block IO.
+
 		// Subscribe.
 		err := m.state.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
-			GuildID:  guildID,
-			Channels: guild.subChannels,
+			GuildID:    guildID,
+			Channels:   guild.subChannels,
+			Typing:     true,
+			Activities: true,
 		})
 
 		if err != nil {
