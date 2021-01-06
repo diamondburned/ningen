@@ -88,9 +88,9 @@ func (s *MemberStore) MemberSet(guildID discord.GuildID, member discord.Member) 
 	}
 	s.mut.Unlock()
 
-	gm.mut.RLock()
+	gm.mut.Lock()
 	gm.members[member.User.ID] = member
-	gm.mut.RUnlock()
+	gm.mut.Unlock()
 
 	return nil
 }
@@ -104,9 +104,9 @@ func (s *MemberStore) MemberRemove(guildID discord.GuildID, userID discord.UserI
 		return nil
 	}
 
-	gm.mut.RLock()
+	gm.mut.Lock()
 	delete(gm.members, userID)
-	gm.mut.RUnlock()
+	gm.mut.Unlock()
 
 	return nil
 }
