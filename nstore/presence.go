@@ -55,7 +55,7 @@ func (pres *PresenceStore) Presence(
 // PresenceStore's Presence and Presences methods. The given callback must not
 // store the pointer outside of the callback; it must do so after making its own
 // copy.
-func (pres *PresenceStore) Each(g discord.GuildID, fn func(*gateway.Presence) (stop bool)) error {
+func (pres *PresenceStore) Each(g discord.GuildID, fn func(*gateway.Presence) (stop bool)) {
 	pres.mut.RLock()
 	defer pres.mut.RUnlock()
 
@@ -68,8 +68,6 @@ func (pres *PresenceStore) Each(g discord.GuildID, fn func(*gateway.Presence) (s
 			break
 		}
 	}
-
-	return nil
 }
 
 // presence gets the presence without locking the mutex.

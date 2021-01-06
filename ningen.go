@@ -3,7 +3,6 @@
 package ningen
 
 import (
-	"log"
 	"sort"
 
 	"github.com/diamondburned/arikawa/v2/discord"
@@ -36,7 +35,8 @@ type State struct {
 	initd chan struct{} // nil after Open().
 
 	// Custom Cabinet values.
-	PresenceState *nstore.PresenceStore
+	MemberStore   *nstore.MemberStore
+	PresenceStore *nstore.PresenceStore
 
 	// Custom State values.
 	NoteState         *note.State
@@ -56,8 +56,11 @@ func FromState(s *state.State) (*State, error) {
 		PreHandler: handler.New(),
 	}
 
-	state.PresenceState = nstore.NewPresenceStore()
-	state.PresenceStore = state.PresenceState
+	state.MemberStore = nstore.NewMemberStore()
+	state.PresenceStore = nstore.NewPresenceStore()
+
+	state.Cabinet.MemberStore = state.MemberStore
+	state.Cabinet.PresenceStore = state.PresenceStore
 
 	// This is required to avoid data race with future handlers.
 	state.PreHandler.Synchronous = true
@@ -85,7 +88,6 @@ func FromState(s *state.State) (*State, error) {
 		// Might be better to trigger this on a ReadySupplemental event, as
 		// that's when things are truly done?
 		case *gateway.ReadyEvent, *gateway.ResumedEvent:
-			log.Println("[ningen] Ready or Resumed received")
 			state.Handler.Call(&Connected{v})
 		}
 
