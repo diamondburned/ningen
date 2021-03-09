@@ -64,6 +64,8 @@ func (p *inlineDelimiterProcessor) CanOpenCloser(opener, closer *parser.Delimite
 		p.attr = AttrStrikethrough
 	case p.char == '`' && consumes == 1: // `
 		p.attr = AttrMonospace
+	case p.char == '`' && consumes == 2: // ``
+		p.attr = AttrMonospace
 	default:
 		return false
 	}

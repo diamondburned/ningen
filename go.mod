@@ -6,6 +6,6 @@ require (
 	github.com/diamondburned/arikawa/v2 v2.0.0-20210101083335-169b36126239
 	github.com/pkg/errors v0.9.1
 	github.com/twmb/murmur3 v1.1.3
-	github.com/yuin/goldmark v1.1.30
+	github.com/yuin/goldmark v1.3.2
 	go4.org v0.0.0-20200411211856-f5505b9728dd
 )
