@@ -1,6 +1,8 @@
 # [ningen][doc]
 
-Abstracted helpful functions and packages to aid in Discord client developmentok
+ningen provides abstractions that override [Arikawa][arikawa]'s existing state
+to provide behaviors more similar to the official client with more aggressive
+caching.
 
 ## Usage
 
@@ -28,6 +30,8 @@ return startApp(n)
 Afterwards, `*ningen.State` can be used as if it is `*state.State`. The new
 state will transparently behave more similarly to the official client.
 
+### Extras
+
 In addition to wrapping, `*ningen.State` also adds a few more stores that the
 client can use:
 
@@ -49,3 +53,11 @@ For detailed documentation of each state, see the [reference
 documentation][doc].
 
 [doc]: https://pkg.go.dev/github.com/diamondburned/ningen
+
+## Markdown
+
+ningen also provides a built-in Discord Markdown parser using
+[goldmark][goldmark]. For an example on how to implement a custom Markdown
+renderer that is compatible with ningen, see [md/renderer.go](https://github.com/diamondburned/ningen/blob/v1.0.0/md/renderer.go#L36).
+
+[goldmark]: https://github.com/yuin/goldmark
