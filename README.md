@@ -4,6 +4,8 @@ ningen provides abstractions that override [Arikawa][arikawa]'s existing state
 to provide behaviors more similar to the official client with more aggressive
 caching.
 
+[arikawa]: https://github.com/diamondburned/arikawa
+
 ## Usage
 
 Using ningen is similar to using `*state.State`, but you'd be handling around
