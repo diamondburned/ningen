@@ -22,22 +22,22 @@ func (b fenced) Trigger() []byte {
 }
 
 func (b fenced) Parse(p ast.Node, r text.Reader, pc parser.Context) ast.Node {
-	n, _ := b._open(p, r, pc)
+	n, _ := b.open(p, r, pc)
 	if n == nil {
 		return nil
 	}
 
-	// Crawl until b.Continue is done:
-	for state := parser.Continue; state != parser.Close; state = b._continue(n, r, pc) {
+	// Crawl until b.next is done:
+	for state := parser.Continue; state != parser.Close; state = b.next(n, r, pc) {
 	}
 
 	// Close:
-	b._close(n, r, pc)
+	b.close(n, r, pc)
 
 	return n
 }
 
-func (b fenced) _open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, parser.State) {
+func (b fenced) open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, parser.State) {
 	line, segment := r.PeekLine()
 
 	i := 0
@@ -54,7 +54,7 @@ func (b fenced) _open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, p
 	// Advance through the backticks
 	r.Advance(oFenceLength)
 
-	var node = ast.NewFencedCodeBlock(nil)
+	node := ast.NewFencedCodeBlock(nil)
 
 	// If this isn't the last thing in the line: (```<language>)
 	if i < len(line)-1 {
@@ -73,13 +73,16 @@ func (b fenced) _open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, p
 				r.Advance(infoStop - infoStart)
 			}
 		}
+	} else {
+		// Else consume the rest of the line.
+		r.AdvanceLine()
 	}
 
 	pc.Set(fencedCodeBlockInfoKey, &fenceData{oFenceLength, node})
 	return node, parser.NoChildren
 }
 
-func (b fenced) _continue(node ast.Node, r text.Reader, pc parser.Context) parser.State {
+func (b fenced) next(node ast.Node, r text.Reader, pc parser.Context) parser.State {
 	line, segment := r.PeekLine()
 	if len(line) == 0 {
 		return parser.Close
@@ -138,7 +141,7 @@ func (b fenced) _continue(node ast.Node, r text.Reader, pc parser.Context) parse
 	return parser.Continue | parser.NoChildren
 }
 
-func (b fenced) _close(node ast.Node, r text.Reader, pc parser.Context) {
+func (b fenced) close(node ast.Node, r text.Reader, pc parser.Context) {
 	fdata := pc.Get(fencedCodeBlockInfoKey).(*fenceData)
 	if fdata.node == node {
 		pc.Set(fencedCodeBlockInfoKey, nil)

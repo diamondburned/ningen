@@ -1,6 +1,6 @@
 module github.com/diamondburned/ningen/v2
 
-go 1.14
+go 1.16
 
 require (
 	github.com/diamondburned/arikawa/v2 v2.0.5

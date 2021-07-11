@@ -1,30 +1,18 @@
 package md
 
 import (
-	"bytes"
 	"fmt"
+	"strings"
 	"testing"
+
+	_ "embed"
 
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
 )
 
-const message = `**this is a test.** https://google.com strictly URL.
-> be me
-> wacky **blockquote**
-> fml
-> >>> bruh
-` + "```" + `go
-package main
-
-func main() {
-	fmt.Println("Bruh moment.")
-}
-` + "```" + `
-[test](https://google.com)
-
-**bold and *italics***
-`
+//go:embed renderer_test.txt
+var message string
 
 func TestRenderer(t *testing.T) {
 	p := parser.NewParser(
@@ -33,7 +21,7 @@ func TestRenderer(t *testing.T) {
 	)
 
 	node := p.Parse(text.NewReader([]byte(message)))
-	buff := bytes.Buffer{}
+	buff := strings.Builder{}
 	DefaultRenderer.Render(&buff, []byte(message), node)
 
 	fmt.Println(buff.String())

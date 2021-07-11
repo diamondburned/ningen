@@ -56,7 +56,7 @@ func (r *BasicRenderer) walker(w io.Writer, source []byte, n ast.Node, enter boo
 		if enter {
 			// A blockquote contains a paragraph each line. Because Discord.
 			for child := n.FirstChild(); child != nil; child = child.NextSibling() {
-				write(w, "> ")
+				io.WriteString(w, "> ")
 				ast.Walk(child, func(node ast.Node, enter bool) (ast.WalkStatus, error) {
 					// We only call when entering, since we don't want to trigger a
 					// hard new line after each paragraph.
@@ -72,40 +72,42 @@ func (r *BasicRenderer) walker(w io.Writer, source []byte, n ast.Node, enter boo
 
 	case *ast.Paragraph:
 		if !enter {
-			write(w, "\n")
+			io.WriteString(w, "\n")
 		}
 	case *ast.FencedCodeBlock:
 		if enter {
 			// Write the body
 			for i := 0; i < n.Lines().Len(); i++ {
 				line := n.Lines().At(i)
-				write(w, "▏▕  "+string(line.Value(source)))
+				io.WriteString(w, "| "+string(line.Value(source)))
 			}
+		} else {
+			io.WriteString(w, "\n")
 		}
 	case *ast.Link:
 		if enter {
-			write(w, string(n.Title)+" ("+string(n.Destination)+")")
+			io.WriteString(w, string(n.Title)+" ("+string(n.Destination)+")")
 		}
 	case *ast.AutoLink:
 		if enter {
-			write(w, string(n.URL(source)))
+			io.WriteString(w, string(n.URL(source)))
 		}
 	case *Inline:
 		// n.Attr should be used, but since we're in plaintext mode, there is no
 		// formatting.
 	case *Emoji:
 		if enter {
-			write(w, ":"+string(n.Name)+":")
+			io.WriteString(w, ":"+string(n.Name)+":")
 		}
 	case *Mention:
 		if enter {
 			switch {
 			case n.Channel != nil:
-				write(w, "#"+n.Channel.Name)
+				io.WriteString(w, "#"+n.Channel.Name)
 			case n.GuildUser != nil:
-				write(w, "@"+n.GuildUser.Username)
+				io.WriteString(w, "@"+n.GuildUser.Username)
 			case n.GuildRole != nil:
-				write(w, "@"+n.GuildRole.Name)
+				io.WriteString(w, "@"+n.GuildRole.Name)
 			}
 		}
 	case *ast.String:
@@ -117,15 +119,11 @@ func (r *BasicRenderer) walker(w io.Writer, source []byte, n ast.Node, enter boo
 			w.Write(n.Segment.Value(source))
 			switch {
 			case n.HardLineBreak():
-				write(w, "\n\n")
+				io.WriteString(w, "\n\n")
 			case n.SoftLineBreak():
-				write(w, "\n")
+				io.WriteString(w, "\n")
 			}
 		}
 	}
 	return ast.WalkContinue
-}
-
-func write(w io.Writer, str string) {
-	w.Write([]byte(str))
 }
