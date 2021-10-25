@@ -3,6 +3,7 @@
 package ningen
 
 import (
+	"context"
 	"sort"
 
 	"github.com/diamondburned/arikawa/v2/discord"
@@ -18,6 +19,14 @@ import (
 	"github.com/diamondburned/ningen/v2/states/relationship"
 )
 
+var cancelledCtx context.Context
+
+func init() {
+	c, cancel := context.WithCancel(context.Background())
+	cancel()
+	cancelledCtx = c
+}
+
 // Connected is an event that's sent on Ready or Resumed. The event arrives
 // before all ningen's handlers are called.
 type Connected struct {
@@ -32,8 +41,6 @@ type State struct {
 	// synchronous.
 	PreHandler *handler.Handler
 
-	initd chan struct{} // nil after Open().
-
 	// Custom Cabinet values.
 	MemberStore   *nstore.MemberStore
 	PresenceStore *nstore.PresenceStore
@@ -45,6 +52,9 @@ type State struct {
 	EmojiState        *emoji.State
 	MemberState       *member.State
 	RelationshipState *relationship.State
+
+	initd  chan struct{} // nil after Open().
+	oldCtx context.Context
 }
 
 // FromState wraps a normal state.
@@ -140,6 +150,32 @@ func (s *State) PrivateChannels() ([]discord.Channel, error) {
 	})
 
 	return c, nil
+}
+
+// WithContext returns State with the given context.
+func (s *State) WithContext(ctx context.Context) *State {
+	cpy := *s
+	cpy.State = cpy.State.WithContext(ctx)
+	return &cpy
+}
+
+// Offline returns an offline version of the state.
+func (s *State) Offline() *State {
+	oldCtx := s.Context()
+	cpy := s.WithContext(cancelledCtx)
+	cpy.oldCtx = oldCtx
+	return cpy
+}
+
+// Online returns an online state. If the state is already online, then it
+// returns itself.
+func (s *State) Online() *State {
+	if s.oldCtx == nil {
+		return s
+	}
+	online := s.WithContext(s.oldCtx)
+	online.oldCtx = nil
+	return online
 }
 
 // MessageMentions returns true if the given message mentions the current user.
