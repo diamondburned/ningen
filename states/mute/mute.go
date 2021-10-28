@@ -138,7 +138,7 @@ func (m *State) GuildSettings(guildID discord.GuildID) gateway.UserGuildSetting 
 
 func muteConfigInvalid(mute *gateway.UserMuteConfig) bool {
 	// If there is no config, then it's a permanent mute.
-	if mute == nil {
+	if mute == nil || mute.SelectedTimeWindow == -1 {
 		return false
 	}
 	// Else, if the time is before now, then it's an expired mute, therefore
