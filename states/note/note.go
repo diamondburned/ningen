@@ -3,10 +3,10 @@ package note
 import (
 	"sync"
 
-	"github.com/diamondburned/arikawa/v2/discord"
-	"github.com/diamondburned/arikawa/v2/gateway"
-	"github.com/diamondburned/arikawa/v2/state"
-	"github.com/diamondburned/ningen/v2/handlerrepo"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/diamondburned/ningen/v3/handlerrepo"
 )
 
 type State struct {
@@ -23,7 +23,7 @@ func NewState(state *state.State, r handlerrepo.AddHandler) *State {
 		fetching: map[discord.UserID]struct{}{},
 	}
 
-	r.AddHandler(func(u *gateway.UserNoteUpdateEvent) {
+	r.AddSyncHandler(func(u *gateway.UserNoteUpdateEvent) {
 		noteState.mutex.Lock()
 		defer noteState.mutex.Unlock()
 

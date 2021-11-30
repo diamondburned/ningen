@@ -6,17 +6,17 @@ import (
 	"context"
 	"sort"
 
-	"github.com/diamondburned/arikawa/v2/discord"
-	"github.com/diamondburned/arikawa/v2/gateway"
-	"github.com/diamondburned/arikawa/v2/state"
-	"github.com/diamondburned/arikawa/v2/utils/handler"
-	"github.com/diamondburned/ningen/v2/nstore"
-	"github.com/diamondburned/ningen/v2/states/emoji"
-	"github.com/diamondburned/ningen/v2/states/member"
-	"github.com/diamondburned/ningen/v2/states/mute"
-	"github.com/diamondburned/ningen/v2/states/note"
-	"github.com/diamondburned/ningen/v2/states/read"
-	"github.com/diamondburned/ningen/v2/states/relationship"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/diamondburned/arikawa/v3/utils/handler"
+	"github.com/diamondburned/ningen/v3/nstore"
+	"github.com/diamondburned/ningen/v3/states/emoji"
+	"github.com/diamondburned/ningen/v3/states/member"
+	"github.com/diamondburned/ningen/v3/states/mute"
+	"github.com/diamondburned/ningen/v3/states/note"
+	"github.com/diamondburned/ningen/v3/states/read"
+	"github.com/diamondburned/ningen/v3/states/relationship"
 )
 
 var cancelledCtx context.Context
@@ -37,10 +37,6 @@ type State struct {
 	*state.State
 	*handler.Handler
 
-	// PreHandler is the handler that is given to states; it is always
-	// synchronous.
-	PreHandler *handler.Handler
-
 	// Custom Cabinet values.
 	MemberStore   *nstore.MemberStore
 	PresenceStore *nstore.PresenceStore
@@ -60,10 +56,9 @@ type State struct {
 // FromState wraps a normal state.
 func FromState(s *state.State) (*State, error) {
 	state := &State{
-		initd:      make(chan struct{}, 1),
-		State:      s,
-		Handler:    handler.New(),
-		PreHandler: handler.New(),
+		initd:   make(chan struct{}, 1),
+		State:   s,
+		Handler: handler.New(),
 	}
 
 	state.MemberStore = nstore.NewMemberStore()
@@ -72,27 +67,21 @@ func FromState(s *state.State) (*State, error) {
 	state.Cabinet.MemberStore = state.MemberStore
 	state.Cabinet.PresenceStore = state.PresenceStore
 
-	// This is required to avoid data race with future handlers.
-	state.PreHandler.Synchronous = true
-
 	// Give our local states the synchronous prehandler.
-	state.NoteState = note.NewState(s, state.PreHandler)
-	state.ReadState = read.NewState(s, state.PreHandler)
-	state.MutedState = mute.NewState(s.Cabinet, state.PreHandler)
+	state.NoteState = note.NewState(s, state)
+	state.ReadState = read.NewState(s, state)
+	state.MutedState = mute.NewState(s.Cabinet, state)
 	state.EmojiState = emoji.NewState(s.Cabinet)
-	state.MemberState = member.NewState(s, state.PreHandler)
-	state.RelationshipState = relationship.NewState(state.PreHandler)
+	state.MemberState = member.NewState(s, state)
+	state.RelationshipState = relationship.NewState(state)
 
-	s.AddHandler(func(v interface{}) {
+	s.AddSyncHandler(func(v interface{}) {
 		switch v := v.(type) {
 		case *gateway.SessionsReplaceEvent:
 			if u, err := s.Me(); err == nil {
-				s.PresenceSet(0, joinSession(*u, v))
+				s.PresenceSet(0, joinSession(*u, v), true)
 			}
 		}
-
-		// Synchronously run the handlers that our states use.
-		state.PreHandler.Call(v)
 
 		switch v.(type) {
 		// Might be better to trigger this on a ReadySupplemental event, as
@@ -121,21 +110,24 @@ func FromState(s *state.State) (*State, error) {
 	return state, nil
 }
 
-func (s *State) Open() error {
+func (s *State) Open(ctx context.Context) error {
 	// Ensure the channel is free.
 	select {
 	case <-s.initd:
 	default:
 	}
 
-	if err := s.State.Open(); err != nil {
+	if err := s.State.Open(ctx); err != nil {
 		return err
 	}
 
 	// Wait until ReadySupplementalEvent.
-	<-s.initd
-
-	return nil
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-s.initd:
+		return nil
+	}
 }
 
 // PrivateChannels returns the sorted list of private channels from the state.
@@ -267,10 +259,10 @@ func messageMentions(msg discord.Message, uID discord.UserID) bool {
 	return false
 }
 
-func joinSession(me discord.User, r *gateway.SessionsReplaceEvent) gateway.Presence {
+func joinSession(me discord.User, r *gateway.SessionsReplaceEvent) *discord.Presence {
 	ses := *r
 
-	var status gateway.Status
+	var status discord.Status
 	var activities []discord.Activity
 
 	for i := len(ses) - 1; i >= 0; i-- {
@@ -283,7 +275,7 @@ func joinSession(me discord.User, r *gateway.SessionsReplaceEvent) gateway.Prese
 		activities = append(activities, presence.Activities...)
 	}
 
-	return gateway.Presence{
+	return &discord.Presence{
 		User:       me,
 		Status:     status,
 		Activities: activities,

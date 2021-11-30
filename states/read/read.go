@@ -4,12 +4,12 @@ package read
 import (
 	"sync"
 
-	"github.com/diamondburned/arikawa/v2/api"
-	"github.com/diamondburned/arikawa/v2/discord"
-	"github.com/diamondburned/arikawa/v2/gateway"
-	"github.com/diamondburned/arikawa/v2/state"
-	"github.com/diamondburned/arikawa/v2/utils/handler"
-	"github.com/diamondburned/ningen/v2/handlerrepo"
+	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/diamondburned/arikawa/v3/utils/handler"
+	"github.com/diamondburned/ningen/v3/handlerrepo"
 )
 
 type UpdateEvent struct {
@@ -36,9 +36,8 @@ func NewState(state *state.State, r handlerrepo.AddHandler) *State {
 	}
 
 	readstate.onUpdates = handler.New()
-	readstate.onUpdates.Synchronous = true
 
-	r.AddHandler(func(r *gateway.ReadyEvent) {
+	r.AddSyncHandler(func(r *gateway.ReadyEvent) {
 		readstate.mutex.Lock()
 		defer readstate.mutex.Unlock()
 
@@ -49,12 +48,12 @@ func NewState(state *state.State, r handlerrepo.AddHandler) *State {
 		}
 	})
 
-	r.AddHandler(func(a *gateway.MessageAckEvent) {
+	r.AddSyncHandler(func(a *gateway.MessageAckEvent) {
 		// do not send a duplicate ack
 		readstate.markRead(a.ChannelID, a.MessageID, false)
 	})
 
-	r.AddHandler(func(c *gateway.MessageCreateEvent) {
+	r.AddSyncHandler(func(c *gateway.MessageCreateEvent) {
 		var mentions int
 
 		for _, u := range c.Mentions {
@@ -72,7 +71,7 @@ func NewState(state *state.State, r handlerrepo.AddHandler) *State {
 // OnUpdate adds a read update callback into the list. This function is
 // thread-safe. It is synchronous by default.
 func (r *State) OnUpdate(fn func(*UpdateEvent)) (rm func()) {
-	return r.onUpdates.AddHandler(fn)
+	return r.onUpdates.AddSyncHandler(fn)
 }
 
 func (r *State) FindLast(channelID discord.ChannelID) *gateway.ReadState {
@@ -101,7 +100,7 @@ func (r *State) MarkUnread(chID discord.ChannelID, msgID discord.MessageID, ment
 
 	if ch, _ := r.state.Cabinet.Channel(chID); ch != nil {
 		ch.LastMessageID = msgID
-		r.state.ChannelSet(*ch)
+		r.state.ChannelSet(ch, false)
 	}
 
 	if msg, _ := r.state.Cabinet.Message(chID, msgID); msg != nil {

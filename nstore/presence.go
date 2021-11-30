@@ -3,23 +3,22 @@ package nstore
 import (
 	"sync"
 
-	"github.com/diamondburned/arikawa/v2/discord"
-	"github.com/diamondburned/arikawa/v2/gateway"
-	"github.com/diamondburned/arikawa/v2/state/store"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/state/store"
 )
 
 // PresenceStore is a presence store that allows searching for a user presence
 // regardless of the guild they're from.
 type PresenceStore struct {
 	mut        sync.RWMutex
-	presences  map[discord.UserID]*gateway.Presence
-	userGuilds map[discord.UserID]map[discord.GuildID]*gateway.Presence
+	presences  map[discord.UserID]*discord.Presence
+	userGuilds map[discord.UserID]map[discord.GuildID]*discord.Presence
 }
 
 func NewPresenceStore() *PresenceStore {
 	return &PresenceStore{
-		presences:  map[discord.UserID]*gateway.Presence{},
-		userGuilds: map[discord.UserID]map[discord.GuildID]*gateway.Presence{},
+		presences:  map[discord.UserID]*discord.Presence{},
+		userGuilds: map[discord.UserID]map[discord.GuildID]*discord.Presence{},
 	}
 }
 
@@ -27,14 +26,14 @@ func (pres *PresenceStore) Reset() error {
 	pres.mut.Lock()
 	defer pres.mut.Unlock()
 
-	pres.presences = map[discord.UserID]*gateway.Presence{}
-	pres.userGuilds = map[discord.UserID]map[discord.GuildID]*gateway.Presence{}
+	pres.presences = map[discord.UserID]*discord.Presence{}
+	pres.userGuilds = map[discord.UserID]map[discord.GuildID]*discord.Presence{}
 
 	return nil
 }
 
 func (pres *PresenceStore) Presence(
-	guild discord.GuildID, user discord.UserID) (*gateway.Presence, error) {
+	guild discord.GuildID, user discord.UserID) (*discord.Presence, error) {
 
 	pres.mut.RLock()
 	defer pres.mut.RUnlock()
@@ -55,7 +54,7 @@ func (pres *PresenceStore) Presence(
 // PresenceStore's Presence and Presences methods. The given callback must not
 // store the pointer outside of the callback; it must do so after making its own
 // copy.
-func (pres *PresenceStore) Each(g discord.GuildID, fn func(*gateway.Presence) (stop bool)) {
+func (pres *PresenceStore) Each(g discord.GuildID, fn func(*discord.Presence) (stop bool)) {
 	pres.mut.RLock()
 	defer pres.mut.RUnlock()
 
@@ -71,7 +70,7 @@ func (pres *PresenceStore) Each(g discord.GuildID, fn func(*gateway.Presence) (s
 }
 
 // presence gets the presence without locking the mutex.
-func (pres *PresenceStore) presence(guild discord.GuildID, user discord.UserID) *gateway.Presence {
+func (pres *PresenceStore) presence(guild discord.GuildID, user discord.UserID) *discord.Presence {
 	// Prioritize presences from users that are in multiple guilds.
 	if guild.IsValid() {
 		guilds, ok := pres.userGuilds[user]
@@ -95,11 +94,11 @@ func (pres *PresenceStore) presence(guild discord.GuildID, user discord.UserID) 
 // so Each should be preferred over Presences. The only reason this method does
 // what is intended is for compatibility with internal state functions that may
 // rely on this for some reason.
-func (pres *PresenceStore) Presences(guild discord.GuildID) ([]gateway.Presence, error) {
+func (pres *PresenceStore) Presences(guild discord.GuildID) ([]discord.Presence, error) {
 	pres.mut.RLock()
 	defer pres.mut.RUnlock()
 
-	var presences = make([]gateway.Presence, 0, len(pres.presences))
+	var presences = make([]discord.Presence, 0, len(pres.presences))
 	for userID := range pres.presences {
 		presence := pres.presence(guild, userID)
 		presences = append(presences, *presence)
@@ -108,15 +107,14 @@ func (pres *PresenceStore) Presences(guild discord.GuildID) ([]gateway.Presence,
 	return presences, nil
 }
 
-func (pres *PresenceStore) PresenceSet(guild discord.GuildID, p gateway.Presence) error {
+func (pres *PresenceStore) PresenceSet(guild discord.GuildID, p *discord.Presence, update bool) error {
 	pres.mut.Lock()
 	defer pres.mut.Unlock()
 
 	// Do we already have this presence?
-	presence, ok := pres.presences[p.User.ID]
-	if !ok {
+	if _, ok := pres.presences[p.User.ID]; !ok {
 		// If not, then don't bother adding a guild record.
-		pres.presences[p.User.ID] = &p
+		pres.presences[p.User.ID] = p
 		return nil
 	}
 
@@ -125,21 +123,14 @@ func (pres *PresenceStore) PresenceSet(guild discord.GuildID, p gateway.Presence
 
 	guilds, ok := pres.userGuilds[p.User.ID]
 	if ok {
-		guilds[guild] = &p
+		guilds[guild] = p
 		return nil
 	}
 
-	guilds = map[discord.GuildID]*gateway.Presence{}
+	guilds = map[discord.GuildID]*discord.Presence{}
 	pres.userGuilds[p.User.ID] = guilds
 
-	// If we're inserting a presence with the same guild ID, then we should
-	// replace the fallback one as well.
-	if presence.GuildID == guild {
-		*presence = p
-		guilds[guild] = presence
-	} else {
-		guilds[guild] = &p
-	}
+	guilds[guild] = p
 
 	return nil
 }

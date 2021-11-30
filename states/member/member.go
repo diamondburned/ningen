@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/diamondburned/arikawa/v2/discord"
-	"github.com/diamondburned/arikawa/v2/gateway"
-	"github.com/diamondburned/arikawa/v2/state"
-	"github.com/diamondburned/ningen/v2/handlerrepo"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/diamondburned/ningen/v3/handlerrepo"
 	"github.com/pkg/errors"
 	"github.com/twmb/murmur3"
 )
@@ -75,10 +75,10 @@ func NewState(state *state.State, h handlerrepo.AddHandler) *State {
 		SearchFrequency: 600 * time.Millisecond,
 		SearchLimit:     50,
 	}
-	h.AddHandler(s.onListUpdateState)
-	h.AddHandler(s.onListUpdate)
-	h.AddHandler(s.onMembers)
-	h.AddHandler(func(*gateway.ReadyEvent) {
+	h.AddSyncHandler(s.onListUpdateState)
+	h.AddSyncHandler(s.onListUpdate)
+	h.AddSyncHandler(s.onMembers)
+	h.AddSyncHandler(func(*gateway.ReadyEvent) {
 		s.guildMu.Lock()
 		s.minFetchMu.Lock()
 
@@ -199,7 +199,7 @@ func (m *State) SearchMember(guildID discord.GuildID, query string) {
 
 	go func() {
 		err := m.state.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
-			GuildID:   []discord.GuildID{guildID},
+			GuildIDs:  []discord.GuildID{guildID},
 			Query:     query,
 			Presences: true,
 			Limit:     m.SearchLimit,
@@ -241,7 +241,7 @@ func (m *State) RequestMember(guildID discord.GuildID, memberID discord.UserID) 
 
 	go func() {
 		err := m.state.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
-			GuildID:   []discord.GuildID{guildID},
+			GuildIDs:  []discord.GuildID{guildID},
 			UserIDs:   []discord.UserID{memberID},
 			Presences: true,
 		})
@@ -268,9 +268,9 @@ func (m *State) onMembers(c *gateway.GuildMembersChunkEvent) {
 	defer guild.mut.Unlock()
 
 	// Add all members to state first.
-	for _, member := range c.Members {
+	for i, member := range c.Members {
 		delete(guild.reqing, member.User.ID)
-		m.state.MemberSet(c.GuildID, member)
+		m.state.MemberSet(c.GuildID, &c.Members[i], true)
 	}
 }
 
@@ -456,7 +456,7 @@ func (m *State) GetMemberList(guildID discord.GuildID, channelID discord.Channel
 		return nil, errors.Wrap(err, "Failed to get channel permissions")
 	}
 
-	hv := ComputeListID(c.Permissions)
+	hv := ComputeListID(c.Overwrites)
 
 	return m.GetMemberListDirect(guildID, hv)
 }
@@ -568,10 +568,12 @@ func (m *State) onListUpdateState(ev *gateway.GuildMemberListUpdate) {
 	for _, op := range ev.Ops {
 		switch op.Op {
 		case "SYNC", "INSERT", "UPDATE":
-			for _, item := range append(op.Items, op.Item) {
+			items := append(op.Items, op.Item)
+			for i, item := range items {
 				if item.Member != nil {
-					m.state.MemberSet(ev.GuildID, item.Member.Member)
-					m.state.PresenceSet(ev.GuildID, item.Member.Presence)
+					update := op.Op == "UPDATE"
+					m.state.MemberSet(ev.GuildID, &items[i].Member.Member, update)
+					m.state.PresenceSet(ev.GuildID, &items[i].Member.Presence, update)
 				}
 			}
 		}

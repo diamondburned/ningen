@@ -3,13 +3,13 @@ package emoji
 import (
 	"sort"
 
-	"github.com/diamondburned/arikawa/v2/discord"
-	"github.com/diamondburned/arikawa/v2/state/store"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/state/store"
 	"github.com/pkg/errors"
 )
 
 type State struct {
-	cab        store.Cabinet
+	cab        *store.Cabinet
 	emojiStore store.EmojiStore
 }
 
@@ -18,7 +18,7 @@ type Guild struct {
 	Emojis []discord.Emoji
 }
 
-func NewState(cab store.Cabinet) *State {
+func NewState(cab *store.Cabinet) *State {
 	return &State{
 		cab: cab,
 	}

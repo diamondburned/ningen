@@ -3,8 +3,8 @@ package nstore
 import (
 	"sync"
 
-	"github.com/diamondburned/arikawa/v2/discord"
-	"github.com/diamondburned/arikawa/v2/state/store"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/state/store"
 )
 
 type MemberStore struct {
@@ -79,7 +79,7 @@ func (s *MemberStore) Members(guildID discord.GuildID) ([]discord.Member, error)
 	return members, nil
 }
 
-func (s *MemberStore) MemberSet(guildID discord.GuildID, member discord.Member) error {
+func (s *MemberStore) MemberSet(guildID discord.GuildID, member *discord.Member, update bool) error {
 	s.mut.Lock()
 	gm, ok := s.guilds[guildID]
 	if !ok {
@@ -88,8 +88,9 @@ func (s *MemberStore) MemberSet(guildID discord.GuildID, member discord.Member) 
 	}
 	s.mut.Unlock()
 
+	// TODO: update
 	gm.mut.Lock()
-	gm.members[member.User.ID] = member
+	gm.members[member.User.ID] = *member
 	gm.mut.Unlock()
 
 	return nil

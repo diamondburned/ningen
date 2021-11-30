@@ -6,25 +6,25 @@ import (
 	"sync"
 	"time"
 
-	"github.com/diamondburned/arikawa/v2/discord"
-	"github.com/diamondburned/arikawa/v2/gateway"
-	"github.com/diamondburned/arikawa/v2/state/store"
-	"github.com/diamondburned/ningen/v2/handlerrepo"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/state/store"
+	"github.com/diamondburned/ningen/v3/handlerrepo"
 )
 
 // State implements a queryable channel and guild mute state.
 type State struct {
-	cab store.Cabinet
+	cab *store.Cabinet
 
 	mutex    sync.RWMutex
 	guilds   map[discord.GuildID]gateway.UserGuildSetting
 	channels map[discord.ChannelID]gateway.UserChannelOverride
 }
 
-func NewState(cab store.Cabinet, r handlerrepo.AddHandler) *State {
+func NewState(cab *store.Cabinet, r handlerrepo.AddHandler) *State {
 	mute := &State{cab: cab}
 
-	r.AddHandler(func(r *gateway.ReadyEvent) {
+	r.AddSyncHandler(func(r *gateway.ReadyEvent) {
 		mute.mutex.Lock()
 		defer mute.mutex.Unlock()
 
@@ -40,7 +40,7 @@ func NewState(cab store.Cabinet, r handlerrepo.AddHandler) *State {
 		}
 	})
 
-	r.AddHandler(func(u *gateway.UserGuildSettingsUpdateEvent) {
+	r.AddSyncHandler(func(u *gateway.UserGuildSettingsUpdateEvent) {
 		mute.mutex.Lock()
 		defer mute.mutex.Unlock()
 
@@ -57,11 +57,11 @@ func NewState(cab store.Cabinet, r handlerrepo.AddHandler) *State {
 // CategoryMuted returns whether or not the channel's category is muted.
 func (m *State) Category(channelID discord.ChannelID) bool {
 	c, err := m.cab.Channel(channelID)
-	if err != nil || !c.CategoryID.IsValid() {
+	if err != nil || !c.ParentID.IsValid() {
 		return false
 	}
 
-	return m.Channel(c.CategoryID)
+	return m.Channel(c.ParentID)
 }
 
 // Channel returns whether or not the channel is muted.

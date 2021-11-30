@@ -3,9 +3,9 @@ package relationship
 import (
 	"sync"
 
-	"github.com/diamondburned/arikawa/v2/discord"
-	"github.com/diamondburned/arikawa/v2/gateway"
-	"github.com/diamondburned/ningen/v2/handlerrepo"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/ningen/v3/handlerrepo"
 )
 
 type State struct {
@@ -18,7 +18,7 @@ func NewState(r handlerrepo.AddHandler) *State {
 		relationships: map[discord.UserID]discord.Relationship{},
 	}
 
-	r.AddHandler(func(r *gateway.ReadyEvent) {
+	r.AddSyncHandler(func(r *gateway.ReadyEvent) {
 		rela.mutex.Lock()
 		defer rela.mutex.Unlock()
 
@@ -29,14 +29,14 @@ func NewState(r handlerrepo.AddHandler) *State {
 		}
 	})
 
-	r.AddHandler(func(add *gateway.RelationshipAddEvent) {
+	r.AddSyncHandler(func(add *gateway.RelationshipAddEvent) {
 		rela.mutex.Lock()
 		defer rela.mutex.Unlock()
 
 		rela.relationships[add.UserID] = add.Relationship
 	})
 
-	r.AddHandler(func(rem *gateway.RelationshipRemoveEvent) {
+	r.AddSyncHandler(func(rem *gateway.RelationshipRemoveEvent) {
 		rela.mutex.Lock()
 		defer rela.mutex.Unlock()
 
