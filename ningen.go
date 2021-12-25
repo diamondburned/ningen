@@ -53,8 +53,21 @@ type State struct {
 	oldCtx context.Context
 }
 
+// New creates a new ningen state from the given token and the default
+// identifier.
+func New(token string) *State {
+	id := gateway.DefaultIdentifier(token)
+	id.Capabilities = 125 // magic constant from reverse-engineering
+	return NewWithIdentifier(id)
+}
+
+// NewWithIdentifier creates a new ningen state from the given identifier.
+func NewWithIdentifier(id gateway.Identifier) *State {
+	return FromState(state.NewWithIdentifier(id))
+}
+
 // FromState wraps a normal state.
-func FromState(s *state.State) (*State, error) {
+func FromState(s *state.State) *State {
 	state := &State{
 		initd:   make(chan struct{}, 1),
 		State:   s,
@@ -87,7 +100,7 @@ func FromState(s *state.State) (*State, error) {
 		// Might be better to trigger this on a ReadySupplemental event, as
 		// that's when things are truly done?
 		case *gateway.ReadyEvent, *gateway.ResumedEvent:
-			state.Handler.Call(&Connected{v})
+			state.Handler.Call(&Connected{v.(gateway.Event)})
 		}
 
 		// Only unblock if we have a ReadySupplemental to ensure that we have
@@ -107,7 +120,7 @@ func FromState(s *state.State) (*State, error) {
 		state.Handler.Call(v)
 	})
 
-	return state, nil
+	return state
 }
 
 func (s *State) Open(ctx context.Context) error {

@@ -1,6 +1,7 @@
 package member
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strconv"
@@ -166,7 +167,7 @@ func (m *State) Subscribe(guildID discord.GuildID) {
 
 	go func() {
 		// Subscribe.
-		err := m.state.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
+		err := m.state.Gateway().Send(context.Background(), &gateway.GuildSubscribeCommand{
 			GuildID:    guildID,
 			Typing:     true,
 			Activities: true,
@@ -198,7 +199,7 @@ func (m *State) SearchMember(guildID discord.GuildID, query string) {
 	gd.lastreq = time.Now()
 
 	go func() {
-		err := m.state.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
+		err := m.state.Gateway().Send(context.Background(), &gateway.RequestGuildMembersCommand{
 			GuildIDs:  []discord.GuildID{guildID},
 			Query:     query,
 			Presences: true,
@@ -240,7 +241,7 @@ func (m *State) RequestMember(guildID discord.GuildID, memberID discord.UserID) 
 	guild.reqing[memberID] = struct{}{}
 
 	go func() {
-		err := m.state.Gateway.RequestGuildMembers(gateway.RequestGuildMembersData{
+		err := m.state.Gateway().Send(context.Background(), &gateway.RequestGuildMembersCommand{
 			GuildIDs:  []discord.GuildID{guildID},
 			UserIDs:   []discord.UserID{memberID},
 			Presences: true,
@@ -430,7 +431,7 @@ func (m *State) RequestMemberList(
 		guild.subMutex.Unlock() // Do not block IO.
 
 		// Subscribe.
-		err := m.state.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
+		err := m.state.Gateway().Send(context.Background(), &gateway.GuildSubscribeCommand{
 			GuildID:    guildID,
 			Channels:   guild.subChannels,
 			Typing:     true,
