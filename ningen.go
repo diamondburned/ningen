@@ -17,6 +17,7 @@ import (
 	"github.com/diamondburned/ningen/v3/states/note"
 	"github.com/diamondburned/ningen/v3/states/read"
 	"github.com/diamondburned/ningen/v3/states/relationship"
+	"github.com/pkg/errors"
 )
 
 var cancelledCtx context.Context
@@ -293,4 +294,40 @@ func joinSession(me discord.User, r *gateway.SessionsReplaceEvent) *discord.Pres
 		Status:     status,
 		Activities: activities,
 	}
+}
+
+// NoPermissionError is returned by AssertPermissions if the user lacks
+// the requested permissions.
+type NoPermissionError struct {
+	Has    discord.Permissions
+	Wanted discord.Permissions
+}
+
+// Error implemenets error.
+func (err *NoPermissionError) Error() string {
+	return "user is missing permission"
+}
+
+// AssertPermissions asserts that the current user has the given permissions in
+// the given channel. If the assertion fails, a NoPermissionError might be
+// returned.
+func (s *State) AssertPermissions(chID discord.ChannelID, perms discord.Permissions) error {
+	me, err := s.Me()
+	if err != nil {
+		return errors.Wrap(err, "cannot get current user information")
+	}
+
+	p, err := s.Permissions(chID, me.ID)
+	if err != nil {
+		return errors.Wrap(err, "cannot get permissions")
+	}
+
+	if !p.Has(perms) {
+		return &NoPermissionError{
+			Has:    p,
+			Wanted: perms,
+		}
+	}
+
+	return nil
 }
