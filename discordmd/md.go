@@ -1,4 +1,4 @@
-package md
+package discordmd
 
 import (
 	"github.com/diamondburned/arikawa/v3/discord"

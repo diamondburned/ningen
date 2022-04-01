@@ -1,4 +1,4 @@
-package md
+package discordmd
 
 import (
 	"github.com/yuin/goldmark/parser"
