@@ -58,7 +58,7 @@ type State struct {
 // identifier.
 func New(token string) *State {
 	id := gateway.DefaultIdentifier(token)
-	id.Capabilities = 125 // magic constant from reverse-engineering
+	id.Capabilities = 253 // magic constant from reverse-engineering
 	return NewWithIdentifier(id)
 }
 
@@ -81,13 +81,14 @@ func FromState(s *state.State) *State {
 	state.Cabinet.MemberStore = state.MemberStore
 	state.Cabinet.PresenceStore = state.PresenceStore
 
+	prehandler := s.Handler
 	// Give our local states the synchronous prehandler.
-	state.NoteState = note.NewState(s, state)
-	state.ReadState = read.NewState(s, state)
-	state.MutedState = mute.NewState(s.Cabinet, state)
+	state.NoteState = note.NewState(s, prehandler)
+	state.ReadState = read.NewState(s, prehandler)
+	state.MutedState = mute.NewState(s.Cabinet, prehandler)
 	state.EmojiState = emoji.NewState(s.Cabinet)
-	state.MemberState = member.NewState(s, state)
-	state.RelationshipState = relationship.NewState(state)
+	state.MemberState = member.NewState(s, prehandler)
+	state.RelationshipState = relationship.NewState(prehandler)
 
 	s.AddSyncHandler(func(v interface{}) {
 		switch v := v.(type) {

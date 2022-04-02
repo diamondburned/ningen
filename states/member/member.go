@@ -22,6 +22,10 @@ var (
 	ErrListNotFound = errors.New("List not found.")
 )
 
+// RequestPresences, when true, will make RequestMember ask for the presences as
+// well.
+var RequestPresences = true
+
 // State handles members and the member list.
 //
 // Members
@@ -99,10 +103,11 @@ type Guild struct {
 
 	// map to keep track of members being requested, which allows duplicate
 	// calls.
-	reqing map[discord.UserID]struct{}
+	requested  map[discord.UserID]bool
+	requesting bool
 
 	// last SearchMember call.
-	lastreq time.Time
+	lastSearch time.Time
 
 	// whether or not the guild is subscribed.
 	subscribed bool
@@ -139,7 +144,7 @@ func (m *State) guildState(guildID discord.GuildID, create bool) *Guild {
 		guild = &Guild{
 			id:          guildID,
 			lists:       map[string]*List{},
-			reqing:      map[discord.UserID]struct{}{},
+			requested:   map[discord.UserID]bool{},
 			subChannels: map[discord.ChannelID][][2]int{},
 		}
 		m.guilds[guildID] = guild
@@ -170,6 +175,7 @@ func (m *State) Subscribe(guildID discord.GuildID) {
 		err := m.state.Gateway().Send(context.Background(), &gateway.GuildSubscribeCommand{
 			GuildID:    guildID,
 			Typing:     true,
+			Threads:    true,
 			Activities: true,
 		})
 
@@ -192,11 +198,11 @@ func (m *State) SearchMember(guildID discord.GuildID, query string) {
 	gd.mut.Lock()
 	defer gd.mut.Unlock()
 
-	if gd.lastreq.Add(m.SearchFrequency).After(time.Now()) {
+	if gd.lastSearch.Add(m.SearchFrequency).After(time.Now()) {
 		return
 	}
 
-	gd.lastreq = time.Now()
+	gd.lastSearch = time.Now()
 
 	go func() {
 		err := m.state.Gateway().Send(context.Background(), &gateway.RequestGuildMembersCommand{
@@ -229,27 +235,55 @@ func (m *State) RequestMember(guildID discord.GuildID, memberID discord.UserID) 
 	guild.mut.Lock()
 	defer guild.mut.Unlock()
 
-	if guild.reqing == nil {
-		guild.reqing = make(map[discord.UserID]struct{})
+	if guild.requested == nil {
+		guild.requested = make(map[discord.UserID]bool)
 	} else {
 		// Check if the member is already being requested.
-		if _, ok := guild.reqing[memberID]; ok {
+		if _, ok := guild.requested[memberID]; ok {
 			return
 		}
 	}
 
-	guild.reqing[memberID] = struct{}{}
+	guild.requested[memberID] = false
+
+	if guild.requesting {
+		return
+	}
+	guild.requesting = true
 
 	go func() {
+		// Wait for 500ms.
+		time.Sleep(500 * time.Millisecond)
+
+		// Re-check the guild for the member list.
+		guild.mut.Lock()
+
+		memberIDs := make([]discord.UserID, 0, 10)
+		for id, requested := range guild.requested {
+			if !requested {
+				memberIDs = append(memberIDs, id)
+				guild.requested[id] = true
+			}
+		}
+
+		guild.requesting = false
+		guild.mut.Unlock()
+
+		// Fetch everything that wasn't requested.
 		err := m.state.Gateway().Send(context.Background(), &gateway.RequestGuildMembersCommand{
 			GuildIDs:  []discord.GuildID{guildID},
-			UserIDs:   []discord.UserID{memberID},
-			Presences: true,
+			UserIDs:   memberIDs,
+			Presences: RequestPresences,
 		})
+
+		log.Println("guild", guildID, "requested", len(memberIDs), "members")
 
 		if err != nil {
 			guild.mut.Lock()
-			delete(guild.reqing, memberID)
+			// Add back the member IDs that we failed to request.
+			for _, id := range memberIDs {
+				guild.requested[id] = false
+			}
 			guild.mut.Unlock()
 
 			m.OnError(errors.Wrap(err, "Failed to request guild members"))
@@ -268,10 +302,8 @@ func (m *State) onMembers(c *gateway.GuildMembersChunkEvent) {
 	guild.mut.Lock()
 	defer guild.mut.Unlock()
 
-	// Add all members to state first.
-	for i, member := range c.Members {
-		delete(guild.reqing, member.User.ID)
-		m.state.MemberSet(c.GuildID, &c.Members[i], true)
+	for _, member := range c.Members {
+		delete(guild.requested, member.User.ID)
 	}
 }
 
