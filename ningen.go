@@ -145,20 +145,6 @@ func (s *State) Open(ctx context.Context) error {
 	}
 }
 
-// PrivateChannels returns the sorted list of private channels from the state.
-func (s *State) PrivateChannels() ([]discord.Channel, error) {
-	c, err := s.State.PrivateChannels()
-	if err != nil {
-		return nil, err
-	}
-
-	sort.SliceStable(c, func(i, j int) bool {
-		return c[i].LastMessageID > c[j].LastMessageID
-	})
-
-	return c, nil
-}
-
 // WithContext returns State with the given context.
 func (s *State) WithContext(ctx context.Context) *State {
 	cpy := *s
@@ -297,6 +283,68 @@ func joinSession(me discord.User, r *gateway.SessionsReplaceEvent) *discord.Pres
 	}
 }
 
+// PrivateChannels returns the sorted list of private channels from the state.
+func (s *State) PrivateChannels() ([]discord.Channel, error) {
+	c, err := s.State.PrivateChannels()
+	if err != nil {
+		return nil, err
+	}
+
+	sort.SliceStable(c, func(i, j int) bool {
+		return c[i].LastMessageID > c[j].LastMessageID
+	})
+
+	return c, nil
+}
+
+// Channels returns a list of visible channels. Empty categories are
+// automatically filtered out.
+func (s *State) Channels(guildID discord.GuildID) ([]discord.Channel, error) {
+	chs, err := s.State.Channels(guildID)
+	if err != nil {
+		return nil, err
+	}
+
+	filtered := chs[:0]
+
+	// Filter out channels we can't see.
+	for _, ch := range chs {
+		if s.HasPermissions(ch.ID, discord.PermissionViewChannel) {
+			filtered = append(filtered, ch)
+		}
+	}
+
+	chs = filtered
+
+	categories := make(map[discord.ChannelID]int, 10)
+	// Initialize the category map.
+	for _, ch := range chs {
+		if ch.Type == discord.GuildCategory {
+			categories[ch.ID] = 0
+		}
+	}
+
+	// Count all channels within categories.
+	for _, ch := range chs {
+		_, ok := categories[ch.ParentID]
+		if ok {
+			categories[ch.ParentID]++
+		}
+	}
+
+	filtered = chs[:0]
+
+	// Filter again but exclude all categories with no channels.
+	for _, ch := range chs {
+		if count, ok := categories[ch.ID]; ok && count == 0 {
+			continue
+		}
+		filtered = append(filtered, ch)
+	}
+
+	return filtered, nil
+}
+
 // NoPermissionError is returned by AssertPermissions if the user lacks
 // the requested permissions.
 type NoPermissionError struct {
@@ -307,6 +355,11 @@ type NoPermissionError struct {
 // Error implemenets error.
 func (err *NoPermissionError) Error() string {
 	return "user is missing permission"
+}
+
+// HasPermissions returns true if AssertPermissions returns a nil error.
+func (s *State) HasPermissions(chID discord.ChannelID, perms discord.Permissions) bool {
+	return s.AssertPermissions(chID, perms) == nil
 }
 
 // AssertPermissions asserts that the current user has the given permissions in
@@ -331,4 +384,77 @@ func (s *State) AssertPermissions(chID discord.ChannelID, perms discord.Permissi
 	}
 
 	return nil
+}
+
+// UnreadIndication indicates the channel as either unread, mentioned (which
+// implies unread) or neither.
+type UnreadIndication uint8
+
+const (
+	ChannelRead UnreadIndication = iota
+	ChannelUnread
+	ChannelMentioned
+)
+
+// ChannelIsUnread returns true if the channel with the given ID has unread
+// messages.
+func (r *State) ChannelIsUnread(chID discord.ChannelID) UnreadIndication {
+	if r.MutedState.Channel(chID) || r.MutedState.Category(chID) {
+		return ChannelRead
+	}
+
+	if !r.HasPermissions(chID, discord.PermissionViewChannel) {
+		return ChannelRead
+	}
+
+	ch, err := r.Cabinet.Channel(chID)
+	if err != nil || !ch.LastMessageID.IsValid() {
+		return ChannelRead
+	}
+
+	state := r.ReadState.ReadState(chID)
+	if state == nil || !state.LastMessageID.IsValid() {
+		return ChannelRead
+	}
+
+	if state.MentionCount > 0 {
+		return ChannelMentioned
+	}
+
+	if state.LastMessageID < ch.LastMessageID {
+		return ChannelUnread
+	}
+
+	return ChannelRead
+}
+
+// GuildIsUnread returns true if the guild contains unread channels.
+func (r *State) GuildIsUnread(guildID discord.GuildID, types []discord.ChannelType) UnreadIndication {
+	if r.MutedState.Guild(guildID, false) {
+		return ChannelRead
+	}
+
+	chs, err := r.Cabinet.Channels(guildID)
+	if err != nil {
+		return ChannelRead
+	}
+
+	typeMap := [255]bool{}
+	for _, typ := range types {
+		typeMap[typ] = true
+	}
+
+	ind := ChannelRead
+
+	for _, ch := range chs {
+		if !typeMap[ch.Type] {
+			continue
+		}
+
+		if s := r.ChannelIsUnread(ch.ID); s > ind {
+			ind = s
+		}
+	}
+
+	return ind
 }

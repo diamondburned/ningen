@@ -2,28 +2,34 @@
 package read
 
 import (
+	"log"
 	"sync"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
-	"github.com/diamondburned/arikawa/v3/utils/handler"
+	"github.com/diamondburned/arikawa/v3/utils/ws"
 	"github.com/diamondburned/ningen/v3/handlerrepo"
 )
 
 type UpdateEvent struct {
 	gateway.ReadState
-	Unread bool
+	GuildID discord.GuildID
+	Unread  bool
 }
+
+var _ gateway.Event = (*UpdateEvent)(nil)
+
+func (ev UpdateEvent) Op() ws.OpCode           { return -1 }
+func (ev UpdateEvent) EventType() ws.EventType { return "__read.UpdateEvent" }
 
 type State struct {
 	mutex  sync.Mutex
 	state  *state.State
 	states map[discord.ChannelID]*gateway.ReadState
 
-	selfID    discord.UserID
-	onUpdates *handler.Handler
+	selfID discord.UserID
 
 	lastAck  api.Ack
 	ackMutex sync.Mutex
@@ -34,8 +40,6 @@ func NewState(state *state.State, r handlerrepo.AddHandler) *State {
 		state:  state,
 		states: make(map[discord.ChannelID]*gateway.ReadState),
 	}
-
-	readstate.onUpdates = handler.New()
 
 	r.AddSyncHandler(func(r *gateway.ReadyEvent) {
 		readstate.mutex.Lock()
@@ -68,13 +72,8 @@ func NewState(state *state.State, r handlerrepo.AddHandler) *State {
 	return readstate
 }
 
-// OnUpdate adds a read update callback into the list. This function is
-// thread-safe. It is synchronous by default.
-func (r *State) OnUpdate(fn func(*UpdateEvent)) (rm func()) {
-	return r.onUpdates.AddSyncHandler(fn)
-}
-
-func (r *State) FindLast(channelID discord.ChannelID) *gateway.ReadState {
+// ReadState gets the read state for a channel.
+func (r *State) ReadState(channelID discord.ChannelID) *gateway.ReadState {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -98,10 +97,13 @@ func (r *State) MarkUnread(chID discord.ChannelID, msgID discord.MessageID, ment
 
 	rs.MentionCount += mentions
 
-	if ch, _ := r.state.Cabinet.Channel(chID); ch != nil {
-		ch.LastMessageID = msgID
-		r.state.ChannelSet(ch, false)
+	ch, _ := r.state.Cabinet.Channel(chID)
+	if ch == nil {
+		return
 	}
+
+	ch.LastMessageID = msgID
+	r.state.ChannelSet(ch, false)
 
 	if msg, _ := r.state.Cabinet.Message(chID, msgID); msg != nil {
 		if msg.Author.ID == r.selfID {
@@ -127,8 +129,11 @@ func (r *State) MarkUnread(chID discord.ChannelID, msgID discord.MessageID, ment
 	// Doing this helps making a consistent synchronizing behavior.
 	go func() {
 		// Announce that there is a change.
-		update := &UpdateEvent{rscp, unread}
-		r.onUpdates.Call(update)
+		r.state.Call(&UpdateEvent{
+			ReadState: rscp,
+			GuildID:   ch.GuildID,
+			Unread:    unread,
+		})
 	}()
 }
 
@@ -176,9 +181,17 @@ func (r *State) markRead(chID discord.ChannelID, msgID discord.MessageID, sendac
 	rscp := *rs
 
 	go func() {
+		ch, _ := r.state.Cabinet.Channel(chID)
+		if ch == nil {
+			return
+		}
+
 		// Announce that there is a change.
-		update := &UpdateEvent{rscp, false}
-		r.onUpdates.Call(update)
+		r.state.Call(&UpdateEvent{
+			ReadState: rscp,
+			GuildID:   ch.GuildID,
+			Unread:    false,
+		})
 	}()
 }
 
@@ -188,5 +201,7 @@ func (r *State) ack(chID discord.ChannelID, msgID discord.MessageID) {
 	defer r.ackMutex.Unlock()
 
 	// Send over Ack.
-	r.state.Ack(chID, msgID, &r.lastAck)
+	if err := r.state.Ack(chID, msgID, &r.lastAck); err != nil {
+		log.Println("Discord: message ack failed:", err)
+	}
 }
