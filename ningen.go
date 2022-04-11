@@ -37,9 +37,23 @@ type ConnectedEvent struct {
 
 // DisconnectedEvent is an event that's sent when the websocket is disconnected.
 type DisconnectedEvent struct {
-	*ws.CloseEvent
-	// LoggedOut is true if the session that Discord gave is now outdated.
-	// LoggedOut bool
+	ws.CloseEvent
+}
+
+// IsLoggedOut returns true if the session that Discord gave is now outdated and
+// that the user must login again.
+func (ev DisconnectedEvent) IsLoggedOut() bool {
+	if ev.Code == -1 {
+		return false
+	}
+
+	for _, code := range gateway.DefaultGatewayOpts.FatalCloseCodes {
+		if code == ev.Code {
+			return true
+		}
+	}
+
+	return false
 }
 
 // IsGraceful returns true if the disconnection is done by the websocket and not
@@ -130,7 +144,7 @@ func FromState(s *state.State) *State {
 		case *gateway.ReadyEvent, *gateway.ResumedEvent:
 			state.Handler.Call(&ConnectedEvent{v})
 		case *ws.CloseEvent:
-			state.Handler.Call(&DisconnectedEvent{v})
+			state.Handler.Call(&DisconnectedEvent{*v})
 		}
 
 		// Call the external handler after we're done. This handler is
