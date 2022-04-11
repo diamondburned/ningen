@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/diamondburned/arikawa/v3/utils/handler"
+	"github.com/diamondburned/arikawa/v3/utils/ws"
 	"github.com/diamondburned/ningen/v3/nstore"
 	"github.com/diamondburned/ningen/v3/states/emoji"
 	"github.com/diamondburned/ningen/v3/states/member"
@@ -28,10 +29,23 @@ func init() {
 	cancelledCtx = c
 }
 
-// Connected is an event that's sent on Ready or Resumed. The event arrives
+// ConnectedEvent is an event that's sent on Ready or Resumed. The event arrives
 // before all ningen's handlers are called.
-type Connected struct {
-	Event gateway.Event
+type ConnectedEvent struct {
+	gateway.Event
+}
+
+// DisconnectedEvent is an event that's sent when the websocket is disconnected.
+type DisconnectedEvent struct {
+	*ws.CloseEvent
+	// LoggedOut is true if the session that Discord gave is now outdated.
+	// LoggedOut bool
+}
+
+// IsGraceful returns true if the disconnection is done by the websocket and not
+// by a connection drop.
+func (ev DisconnectedEvent) IsGraceful() bool {
+	return ev.Code != -1
 }
 
 type State struct {
@@ -90,19 +104,12 @@ func FromState(s *state.State) *State {
 	state.MemberState = member.NewState(s, prehandler)
 	state.RelationshipState = relationship.NewState(prehandler)
 
-	s.AddSyncHandler(func(v interface{}) {
+	s.AddSyncHandler(func(v gateway.Event) {
 		switch v := v.(type) {
 		case *gateway.SessionsReplaceEvent:
 			if u, err := s.Me(); err == nil {
 				s.PresenceSet(0, joinSession(*u, v), true)
 			}
-		}
-
-		switch v.(type) {
-		// Might be better to trigger this on a ReadySupplemental event, as
-		// that's when things are truly done?
-		case *gateway.ReadyEvent, *gateway.ResumedEvent:
-			state.Handler.Call(&Connected{v.(gateway.Event)})
 		}
 
 		// Only unblock if we have a ReadySupplemental to ensure that we have
@@ -115,6 +122,15 @@ func FromState(s *state.State) *State {
 				// Since this channel is one-buffered, we can do this.
 			default:
 			}
+		}
+
+		switch v := v.(type) {
+		// Might be better to trigger this on a ReadySupplemental event, as
+		// that's when things are truly done?
+		case *gateway.ReadyEvent, *gateway.ResumedEvent:
+			state.Handler.Call(&ConnectedEvent{v})
+		case *ws.CloseEvent:
+			state.Handler.Call(&DisconnectedEvent{v})
 		}
 
 		// Call the external handler after we're done. This handler is
