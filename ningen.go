@@ -399,11 +399,17 @@ const (
 // ChannelIsUnread returns true if the channel with the given ID has unread
 // messages.
 func (r *State) ChannelIsUnread(chID discord.ChannelID) UnreadIndication {
-	if r.MutedState.Channel(chID) || r.MutedState.Category(chID) {
+	state := r.ReadState.ReadState(chID)
+	if state == nil || !state.LastMessageID.IsValid() {
 		return ChannelRead
 	}
 
-	if !r.HasPermissions(chID, discord.PermissionViewChannel) {
+	// Mentions override mutes.
+	if state.MentionCount > 0 {
+		return ChannelMentioned
+	}
+
+	if r.MutedState.Channel(chID) || r.MutedState.Category(chID) {
 		return ChannelRead
 	}
 
@@ -412,13 +418,10 @@ func (r *State) ChannelIsUnread(chID discord.ChannelID) UnreadIndication {
 		return ChannelRead
 	}
 
-	state := r.ReadState.ReadState(chID)
-	if state == nil || !state.LastMessageID.IsValid() {
+	// This permission check isn't very important. We can do it just right
+	// before the unread check.
+	if !r.HasPermissions(chID, discord.PermissionViewChannel) {
 		return ChannelRead
-	}
-
-	if state.MentionCount > 0 {
-		return ChannelMentioned
 	}
 
 	if state.LastMessageID < ch.LastMessageID {
