@@ -42,7 +42,7 @@ type DisconnectedEvent struct {
 
 // IsLoggedOut returns true if the session that Discord gave is now outdated and
 // that the user must login again.
-func (ev DisconnectedEvent) IsLoggedOut() bool {
+func (ev *DisconnectedEvent) IsLoggedOut() bool {
 	if ev.Code == -1 {
 		return false
 	}
@@ -58,7 +58,7 @@ func (ev DisconnectedEvent) IsLoggedOut() bool {
 
 // IsGraceful returns true if the disconnection is done by the websocket and not
 // by a connection drop.
-func (ev DisconnectedEvent) IsGraceful() bool {
+func (ev *DisconnectedEvent) IsGraceful() bool {
 	return ev.Code != -1
 }
 
