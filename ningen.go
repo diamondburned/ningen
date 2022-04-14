@@ -219,38 +219,38 @@ func (f MessageMentionFlags) Has(other MessageMentionFlags) bool {
 	return f&other == other
 }
 
-// MessageMentions returns true if the given message mentions the current user.
-func (s *State) MessageMentions(msg *discord.Message) MessageMentionFlags {
-	flags := s.messageMentions(msg)
-
-	if flags.Has(MessageNotifies) {
-		me, _ := s.Cabinet.Me()
-		if me == nil {
-			return flags
-		}
-
-		if p, _ := s.State.Presence(0, me.ID); p != nil {
-			if p.Status == discord.DoNotDisturbStatus {
-				// Erase bit.
-				flags &= ^MessageNotifies
-			}
-		}
+// Status returns the user's presence status. Use to check if notifications
+// should be sent.
+func (s *State) Status() discord.Status {
+	me, _ := s.Cabinet.Me()
+	if me == nil {
+		return discord.OfflineStatus
 	}
 
-	return flags
+	if p, _ := s.State.Presence(0, me.ID); p != nil {
+		return p.Status
+	}
+
+	return discord.OfflineStatus
 }
 
-func (s *State) messageMentions(msg *discord.Message) MessageMentionFlags {
-	// Ignore own messages.
-	if u, err := s.Me(); err == nil && msg.Author.ID == u.ID {
+// MessageMentions returns true if the given message mentions the current user.
+func (s *State) MessageMentions(msg *discord.Message) MessageMentionFlags {
+	me, _ := s.Cabinet.Me()
+	if me == nil {
 		return 0
 	}
 
-	var mutedGuild *gateway.UserGuildSetting
+	// Ignore own messages.
+	if msg.Author.ID == me.ID {
+		return 0
+	}
+
+	var mutedGuild gateway.UserGuildSetting
 
 	// If there's guild:
 	if msg.GuildID.IsValid() {
-		mutedGuild := s.MutedState.GuildSettings(msg.GuildID)
+		mutedGuild = s.MutedState.GuildSettings(msg.GuildID)
 
 		// We're only checking mutes and suppressions, as channels don't
 		// have these. Whatever channels have will override guilds.
@@ -269,69 +269,65 @@ func (s *State) messageMentions(msg *discord.Message) MessageMentionFlags {
 		}
 	}
 
-	// Boolean on whether the message contains a self mention or not:
-	var mentioned = messageMentions(msg, s.Ready().User.ID)
+	var flags MessageMentionFlags
+	if messageMentions(msg, me.ID) {
+		flags = MessageMentions
+	}
 
 	// Check channel settings. Channel settings override guilds.
 	mutedCh := s.MutedState.ChannelOverrides(msg.ChannelID)
 
 	switch mutedCh.Notifications {
+	case gateway.NoNotifications:
+		// No notifications are allowed whatsoever.
+		return 0
+
 	case gateway.AllNotifications:
 		if mutedCh.Muted {
-			return 0
+			return flags
 		}
-
-	case gateway.NoNotifications:
-		// If no notifications are allowed, not even mentions.
-		return 0
 
 	case gateway.OnlyMentions:
 		// If mentions are allowed. We return early because this overrides
 		// the guild settings, even if Guild wants all messages.
-		if mentioned {
-			return MessageMentions | MessageNotifies
+		if flags != 0 {
+			flags |= MessageNotifies
 		}
-		return 0
+		return flags
 	}
 
-	if mutedGuild != nil {
+	if msg.GuildID.IsValid() {
 		switch mutedGuild.Notifications {
 		case gateway.NoNotifications:
-			// If no notifications are allowed whatsoever.
+			// No notifications are allowed whatsoever.
 			return 0
 
 		case gateway.AllNotifications:
-			// If the guild is muted, but we can return early here. If we allow
-			// all notifications, we can return the opposite of muted.
-			//   - If we're muted, we don't want a mention.
-			//   - If we're not muted, we want a mention.
 			if !mutedGuild.Muted {
-				return MessageNotifies
+				// All messages trigger notification if not muted.
+				flags |= MessageNotifies
 			}
-			return 0
+			return flags
 
 		case gateway.OnlyMentions:
-			// We can return early here.
-			if mentioned {
-				return MessageMentions | MessageNotifies
+			if flags != 0 {
+				// If mentioned, will always notify.
+				flags |= MessageNotifies
 			}
-			return 0
+			return flags
 		}
+
 	}
 
 	// Is this from a DM? TODO: get a better check.
-	if ch, err := s.Channel(msg.ChannelID); err == nil {
+	if ch, err := s.Cabinet.Channel(msg.ChannelID); err == nil {
 		// True if the message is from DM or group.
 		if ch.Type == discord.DirectMessage || ch.Type == discord.GroupDM {
-			f := MessageMentions
-			if mentioned {
-				f |= MessageNotifies
-			}
-			return f
+			return flags | MessageNotifies
 		}
 	}
 
-	return 0
+	return flags
 }
 
 func messageMentions(msg *discord.Message, uID discord.UserID) bool {
