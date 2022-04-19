@@ -24,11 +24,23 @@ func NewState(cab *store.Cabinet) *State {
 	}
 }
 
-// Get returns all emojis if the user has Nitro, else only images.
-func (s *State) Get(guildID discord.GuildID) ([]Guild, error) {
+// HasNitro returns true if the current user has Nitro.
+func (s *State) HasNitro() bool {
 	u, err := s.cab.Me()
-	if err == nil && u.Nitro != discord.NoUserNitro {
-		return s.allEmojis(guildID)
+	return err == nil && u.Nitro != discord.NoUserNitro
+}
+
+// ForGuild returns all emojis if the user has Nitro, else only non-animated
+// emojis from the given guild.
+func (s *State) ForGuild(guildID discord.GuildID) ([]Guild, error) {
+	if s.HasNitro() {
+		emojis, err := s.AllEmojis()
+		if err != nil {
+			return nil, err
+		}
+
+		PutGuildFirst(emojis, guildID)
+		return emojis, nil
 	}
 
 	// User doesn't have Nitro, so only non-GIF guild emojis are available:
@@ -67,14 +79,15 @@ func (s *State) Get(guildID discord.GuildID) ([]Guild, error) {
 	}}, nil
 }
 
-func (s *State) allEmojis(firstGuild discord.GuildID) ([]Guild, error) {
+// AllEmojis returns the
+func (s *State) AllEmojis() ([]Guild, error) {
 	// User has Nitro, grab all emojis.
 	guilds, err := s.cab.Guilds()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get guilds")
 	}
 
-	var emojis = make([]Guild, 0, len(guilds))
+	emojis := make([]Guild, 0, len(guilds))
 
 	for _, g := range guilds {
 		if e, err := s.cab.Emojis(g.ID); err == nil {
@@ -89,12 +102,12 @@ func (s *State) allEmojis(firstGuild discord.GuildID) ([]Guild, error) {
 		}
 	}
 
-	// Put the searched emoji in front.
-	if firstGuild.IsValid() {
-		sort.SliceStable(emojis, func(i, j int) bool {
-			return emojis[i].ID == firstGuild
-		})
-	}
-
 	return emojis, nil
+}
+
+// PutGuildFirst puts the guild with the given ID first in the guilds list.
+func PutGuildFirst(guilds []Guild, first discord.GuildID) {
+	sort.SliceStable(guilds, func(i, j int) bool {
+		return guilds[i].ID == first
+	})
 }
