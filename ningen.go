@@ -378,7 +378,13 @@ func (s *State) PrivateChannels() ([]discord.Channel, error) {
 
 // Channels returns a list of visible channels. Empty categories are
 // automatically filtered out.
-func (s *State) Channels(guildID discord.GuildID) ([]discord.Channel, error) {
+func (s *State) Channels(guildID discord.GuildID, allowedTypes []discord.ChannelType) ([]discord.Channel, error) {
+	// I have fully given up on life.
+	var allowedMap [64]bool
+	for _, t := range allowedTypes {
+		allowedMap[t] = true
+	}
+
 	chs, err := s.State.Channels(guildID)
 	if err != nil {
 		return nil, err
@@ -388,9 +394,19 @@ func (s *State) Channels(guildID discord.GuildID) ([]discord.Channel, error) {
 
 	// Filter out channels we can't see.
 	for _, ch := range chs {
-		if s.HasPermissions(ch.ID, discord.PermissionViewChannel) {
-			filtered = append(filtered, ch)
+		if !allowedMap[ch.Type] {
+			continue
 		}
+
+		// Only check if the channel is not a category, since we're filtering
+		// out empty categories anyway.
+		if ch.Type != discord.GuildCategory {
+			if !s.HasPermissions(ch.ID, discord.PermissionViewChannel) {
+				continue
+			}
+		}
+
+		filtered = append(filtered, ch)
 	}
 
 	chs = filtered
