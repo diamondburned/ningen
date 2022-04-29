@@ -13,6 +13,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/utils/ws"
 	"github.com/diamondburned/ningen/v3/nstore"
 	"github.com/diamondburned/ningen/v3/states/emoji"
+	"github.com/diamondburned/ningen/v3/states/guild"
 	"github.com/diamondburned/ningen/v3/states/member"
 	"github.com/diamondburned/ningen/v3/states/mute"
 	"github.com/diamondburned/ningen/v3/states/note"
@@ -74,6 +75,7 @@ type State struct {
 	NoteState         *note.State
 	ReadState         *read.State
 	MutedState        *mute.State
+	GuildState        *guild.State
 	EmojiState        *emoji.State
 	MemberState       *member.State
 	RelationshipState *relationship.State
@@ -114,6 +116,7 @@ func FromState(s *state.State) *State {
 	state.NoteState = note.NewState(s, prehandler)
 	state.ReadState = read.NewState(s, prehandler)
 	state.MutedState = mute.NewState(s.Cabinet, prehandler)
+	state.GuildState = guild.NewState(prehandler)
 	state.EmojiState = emoji.NewState(s.Cabinet)
 	state.MemberState = member.NewState(s, prehandler)
 	state.RelationshipState = relationship.NewState(prehandler)

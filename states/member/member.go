@@ -2,6 +2,7 @@ package member
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
@@ -205,12 +206,17 @@ func (m *State) SearchMember(guildID discord.GuildID, query string) {
 	gd.lastSearch = time.Now()
 
 	go func() {
-		err := m.state.Gateway().Send(context.Background(), &gateway.RequestGuildMembersCommand{
+		search := &gateway.RequestGuildMembersCommand{
 			GuildIDs:  []discord.GuildID{guildID},
 			Query:     query,
 			Presences: true,
 			Limit:     m.SearchLimit,
-		})
+		}
+
+		b, _ := json.Marshal(search)
+		log.Println("search:", string(b))
+
+		err := m.state.Gateway().Send(context.Background(), search)
 
 		if err != nil {
 			m.OnError(errors.Wrap(err, "Failed to search guild members"))
