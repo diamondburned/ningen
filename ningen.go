@@ -230,7 +230,7 @@ func (s *State) Status() discord.Status {
 		return discord.OfflineStatus
 	}
 
-	if p, _ := s.State.Presence(0, me.ID); p != nil {
+	if p, _ := s.PresenceStore.Presence(0, me.ID); p != nil {
 		return p.Status
 	}
 

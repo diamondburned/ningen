@@ -2,7 +2,6 @@ package member
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
@@ -22,10 +21,6 @@ var (
 	// ErrListNotFound is returned if GetMemberList can't find the list.
 	ErrListNotFound = errors.New("List not found.")
 )
-
-// RequestPresences, when true, will make RequestMember ask for the presences as
-// well.
-var RequestPresences = true
 
 // State handles members and the member list.
 //
@@ -65,9 +60,12 @@ type State struct {
 	OnError func(error)
 
 	// RequestFrequency is the duration before the next SearchMember is allowed
-	// to do anything else. Default is 600ms.
+	// to do anything else. Default is 1s.
 	SearchFrequency time.Duration
 	SearchLimit     uint // 50
+	// RequestPresences, when true, will make RequestMember ask for the
+	// presences as well.
+	RequestPresences bool // true
 }
 
 func NewState(state *state.State, h handlerrepo.AddHandler) *State {
@@ -76,10 +74,11 @@ func NewState(state *state.State, h handlerrepo.AddHandler) *State {
 		guilds:     map[discord.GuildID]*Guild{},
 		minFetched: map[discord.ChannelID]int{},
 		OnError: func(err error) {
-			log.Println("Members list error:", err)
+			log.Println("ningen: members list error:", err)
 		},
-		SearchFrequency: 600 * time.Millisecond,
-		SearchLimit:     50,
+		SearchFrequency:  600 * time.Millisecond,
+		SearchLimit:      50,
+		RequestPresences: true,
 	}
 	h.AddSyncHandler(s.onListUpdateState)
 	h.AddSyncHandler(s.onListUpdate)
@@ -195,6 +194,10 @@ func (m *State) Subscribe(guildID discord.GuildID) {
 // SearchMember queries Discord for a list of members with the given query
 // string.
 func (m *State) SearchMember(guildID discord.GuildID, query string) {
+	if query == "" {
+		return
+	}
+
 	gd := m.guildState(guildID, true)
 	gd.mut.Lock()
 	defer gd.mut.Unlock()
@@ -209,12 +212,9 @@ func (m *State) SearchMember(guildID discord.GuildID, query string) {
 		search := &gateway.RequestGuildMembersCommand{
 			GuildIDs:  []discord.GuildID{guildID},
 			Query:     query,
-			Presences: true,
+			Presences: m.RequestPresences,
 			Limit:     m.SearchLimit,
 		}
-
-		b, _ := json.Marshal(search)
-		log.Println("search:", string(b))
 
 		err := m.state.Gateway().Send(context.Background(), search)
 
@@ -279,7 +279,7 @@ func (m *State) RequestMember(guildID discord.GuildID, memberID discord.UserID) 
 		err := m.state.Gateway().Send(context.Background(), &gateway.RequestGuildMembersCommand{
 			GuildIDs:  []discord.GuildID{guildID},
 			UserIDs:   memberIDs,
-			Presences: RequestPresences,
+			Presences: m.RequestPresences,
 		})
 
 		log.Println("guild", guildID, "requested", len(memberIDs), "members")
