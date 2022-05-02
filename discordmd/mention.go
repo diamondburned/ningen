@@ -12,6 +12,7 @@ import (
 
 type Mention struct {
 	ast.BaseInline
+	Message   *discord.Message
 	Mentioned bool
 
 	// both could be nil
@@ -85,6 +86,7 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 
 		return &Mention{
 			BaseInline: ast.BaseInline{},
+			Message:    msg,
 			Mentioned:  mentioned,
 			Channel:    c,
 		}
@@ -113,6 +115,7 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 
 		return &Mention{
 			BaseInline: ast.BaseInline{},
+			Message:    msg,
 			Mentioned:  mentioned,
 			GuildUser:  target,
 		}
@@ -138,6 +141,7 @@ func (mention) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.
 
 		return &Mention{
 			BaseInline: ast.BaseInline{},
+			Message:    msg,
 			Mentioned:  mentioned,
 			GuildRole:  r,
 		}
