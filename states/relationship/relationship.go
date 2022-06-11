@@ -73,7 +73,24 @@ func (r *State) Relationship(userID discord.UserID) discord.RelationshipType {
 	return 0
 }
 
-// Blocked returns if the user is blocked.
-func (r *State) Blocked(userID discord.UserID) bool {
+// IsBlocked returns if the user is blocked.
+func (r *State) IsBlocked(userID discord.UserID) bool {
 	return r.Relationship(userID) == discord.BlockedRelationship
+}
+
+// BlockedUsers returns all blocked users.
+func (r *State) BlockedUsers() []discord.User {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	users := make([]discord.User, 0, len(r.relationships))
+
+	for _, relationship := range r.relationships {
+		if relationship.Type != discord.BlockedRelationship {
+			continue
+		}
+		users = append(users, relationship.User)
+	}
+
+	return users
 }
