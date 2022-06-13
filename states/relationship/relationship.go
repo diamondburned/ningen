@@ -1,6 +1,7 @@
 package relationship
 
 import (
+	"sort"
 	"sync"
 
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -91,6 +92,13 @@ func (r *State) BlockedUsers() []discord.User {
 		}
 		users = append(users, relationship.User)
 	}
+
+	sort.Slice(users, func(i, j int) bool {
+		if users[i].Username != users[j].Username {
+			return users[i].Username < users[j].Username
+		}
+		return users[i].Discriminator < users[j].Discriminator
+	})
 
 	return users
 }
