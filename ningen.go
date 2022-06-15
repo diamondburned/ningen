@@ -126,8 +126,48 @@ func FromState(s *state.State) *State {
 	s.AddSyncHandler(func(v gateway.Event) {
 		switch v := v.(type) {
 		case *gateway.SessionsReplaceEvent:
-			if u, err := s.Me(); err == nil {
-				s.PresenceSet(0, joinSession(*u, v), true)
+			me, _ := s.Me()
+			if me == nil {
+				break
+			}
+
+			s.PresenceSet(0, joinSession(*me, v), true)
+
+		case *gateway.UserSettingsUpdateEvent:
+			me, _ := s.Me()
+			if me == nil {
+				break
+			}
+
+			p, _ := s.PresenceStore.Presence(0, me.ID)
+			if p != nil {
+				new := *p
+				new.Status = v.Status
+
+				if v.CustomStatus != nil {
+					customActivity := discord.Activity{
+						Name: v.CustomStatus.Text,
+					}
+
+					if v.CustomStatus.EmojiName != "" {
+						customActivity.Emoji = &discord.Emoji{
+							ID:   v.CustomStatus.EmojiID,
+							Name: v.CustomStatus.EmojiName,
+						}
+					}
+
+					new.Activities = append([]discord.Activity{}, new.Activities...)
+					for i, activity := range new.Activities {
+						if activity.Type == discord.CustomActivity {
+							new.Activities[i] = customActivity
+							goto found
+						}
+					}
+					new.Activities = append(new.Activities, customActivity)
+				found:
+				}
+
+				s.PresenceSet(p.GuildID, &new, true)
 			}
 		}
 
