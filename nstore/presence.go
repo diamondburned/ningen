@@ -10,15 +10,13 @@ import (
 // PresenceStore is a presence store that allows searching for a user presence
 // regardless of the guild they're from.
 type PresenceStore struct {
-	mut        sync.RWMutex
-	presences  map[discord.UserID]*discord.Presence
-	userGuilds map[discord.UserID]map[discord.GuildID]*discord.Presence
+	mut       sync.RWMutex
+	presences map[discord.UserID][]discord.Presence
 }
 
 func NewPresenceStore() *PresenceStore {
 	return &PresenceStore{
-		presences:  map[discord.UserID]*discord.Presence{},
-		userGuilds: map[discord.UserID]map[discord.GuildID]*discord.Presence{},
+		presences: make(map[discord.UserID][]discord.Presence, 100),
 	}
 }
 
@@ -26,8 +24,7 @@ func (pres *PresenceStore) Reset() error {
 	pres.mut.Lock()
 	defer pres.mut.Unlock()
 
-	pres.presences = map[discord.UserID]*discord.Presence{}
-	pres.userGuilds = map[discord.UserID]map[discord.GuildID]*discord.Presence{}
+	pres.presences = make(map[discord.UserID][]discord.Presence, 100)
 
 	return nil
 }
@@ -58,12 +55,8 @@ func (pres *PresenceStore) Each(g discord.GuildID, fn func(*discord.Presence) (s
 	pres.mut.RLock()
 	defer pres.mut.RUnlock()
 
-	for userID := range pres.presences {
-		// Use the getter instead of our own copy from range, which is a bit
-		// slower, but should be trivial.
-		presence := pres.presence(g, userID)
-
-		if fn(presence) {
+	for _, presences := range pres.presences {
+		if fn(&presences[len(presences)-1]) {
 			break
 		}
 	}
@@ -71,23 +64,22 @@ func (pres *PresenceStore) Each(g discord.GuildID, fn func(*discord.Presence) (s
 
 // presence gets the presence without locking the mutex.
 func (pres *PresenceStore) presence(guild discord.GuildID, user discord.UserID) *discord.Presence {
+	presences, ok := pres.presences[user]
+	if !ok {
+		return nil
+	}
+
 	// Prioritize presences from users that are in multiple guilds.
 	if guild.IsValid() {
-		guilds, ok := pres.userGuilds[user]
-		if ok {
-			presence, ok := guilds[guild]
-			if ok {
-				return presence
+		for _, presence := range presences {
+			if presence.GuildID == guild {
+				return &presence
 			}
 		}
 	}
 
-	presence, ok := pres.presences[user]
-	if ok {
-		return presence
-	}
-
-	return nil
+	// last is latest
+	return &presences[len(presences)-1]
 }
 
 // Presences creates a copy of all known presences. It is a fairly costly copy,
@@ -98,39 +90,38 @@ func (pres *PresenceStore) Presences(guild discord.GuildID) ([]discord.Presence,
 	pres.mut.RLock()
 	defer pres.mut.RUnlock()
 
-	var presences = make([]discord.Presence, 0, len(pres.presences))
-	for userID := range pres.presences {
-		presence := pres.presence(guild, userID)
-		presences = append(presences, *presence)
+	latestPresences := make([]discord.Presence, 0, len(pres.presences))
+	for _, presences := range pres.presences {
+		latestPresences = append(latestPresences, presences[len(presences)-1])
 	}
 
-	return presences, nil
+	return latestPresences, nil
 }
 
 func (pres *PresenceStore) PresenceSet(guild discord.GuildID, p *discord.Presence, update bool) error {
+	cpy := *p
+	cpy.GuildID = guild
+
 	pres.mut.Lock()
 	defer pres.mut.Unlock()
 
-	// Do we already have this presence?
-	if _, ok := pres.presences[p.User.ID]; !ok {
-		// If not, then don't bother adding a guild record.
-		pres.presences[p.User.ID] = p
+	presences, ok := pres.presences[p.User.ID]
+	if !ok {
+		pres.presences[p.User.ID] = []discord.Presence{cpy}
 		return nil
 	}
 
-	// We already have it, so we'll both update it and add a new guild record.
-	// We'll set the guild presence to this copy instead of the fallback.
-
-	guilds, ok := pres.userGuilds[p.User.ID]
-	if ok {
-		guilds[guild] = p
-		return nil
+	for i, presence := range presences {
+		if presence.GuildID == guild {
+			// Delete this entry and break out of the loop. Add this one to the
+			// end of the list always.
+			presences = append(presences[:i], presences[i+1:]...)
+			break
+		}
 	}
 
-	guilds = map[discord.GuildID]*discord.Presence{}
-	pres.userGuilds[p.User.ID] = guilds
-
-	guilds[guild] = p
+	presences = append(presences, cpy)
+	pres.presences[p.User.ID] = presences
 
 	return nil
 }
@@ -139,26 +130,22 @@ func (pres *PresenceStore) PresenceRemove(guild discord.GuildID, user discord.Us
 	pres.mut.Lock()
 	defer pres.mut.Unlock()
 
-	if _, ok := pres.presences[user]; !ok {
-		return nil
-	}
-
-	// Check if we have the presence in a guild record. If we do, then we
-	// shouldn't wipe the user from the fallback map just yet. Else, we can
-	// safely wipe the user off.
-	guilds, ok := pres.userGuilds[user]
+	presences, ok := pres.presences[user]
 	if !ok {
-		delete(pres.presences, user)
 		return nil
 	}
 
-	// Delete the given guild off of the user's record.
-	delete(guilds, guild)
+	for i, presence := range presences {
+		if presence.GuildID == guild {
+			if len(presences) == 1 {
+				delete(pres.presences, user)
+				return nil
+			}
 
-	// If we no longer have any guilds, then cleanup.
-	if len(guilds) == 0 {
-		delete(pres.presences, user)
-		delete(pres.userGuilds, user)
+			presences = append(presences[:i], presences[i+1:]...)
+			pres.presences[user] = presences
+			return nil
+		}
 	}
 
 	return nil
