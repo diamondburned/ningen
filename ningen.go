@@ -6,10 +6,12 @@ import (
 	"context"
 	"sort"
 
+	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/diamondburned/arikawa/v3/utils/handler"
+	"github.com/diamondburned/arikawa/v3/utils/httputil"
 	"github.com/diamondburned/arikawa/v3/utils/ws"
 	"github.com/diamondburned/ningen/v3/nstore"
 	"github.com/diamondburned/ningen/v3/states/emoji"
@@ -558,4 +560,54 @@ func (r *State) GuildIsUnread(guildID discord.GuildID, types []discord.ChannelTy
 	}
 
 	return ind
+}
+
+// SetStatus sets the current user's status and presence.
+func (r *State) SetStatus(status discord.Status, custom *gateway.CustomUserStatus, activities ...discord.Activity) error {
+	me, _ := r.Me()
+
+	cmd := gateway.UpdatePresenceCommand{
+		Status:     status,
+		Activities: activities,
+	}
+
+	if custom != nil {
+		customActivity := discord.Activity{
+			Name:  "Custom Status",
+			Type:  discord.CustomActivity,
+			State: custom.Text,
+		}
+
+		if custom.EmojiName != "" {
+			customActivity.Emoji = &discord.Emoji{
+				ID:   custom.EmojiID,
+				Name: custom.EmojiName,
+			}
+		}
+
+		activities = append([]discord.Activity{}, activities...)
+		activities = append(activities, customActivity)
+	}
+
+	if p, _ := r.PresenceStore.Presence(0, me.ID); p != nil {
+		if status == "" && p.Status != "" {
+			cmd.Status = p.Status
+		}
+		if activities == nil && p.Activities != nil {
+			cmd.Activities = p.Activities
+		}
+	}
+
+	if err := r.Gateway().Send(r.Context(), &cmd); err != nil {
+		return errors.Wrap(err, "cannot update gateway")
+	}
+
+	// Keep this the same as gateway.UserSettings.
+	patchSettings := map[string]interface{}{"status": status}
+	if custom != nil {
+		patchSettings["custom_status"] = custom
+	}
+
+	err := r.FastRequest("PATCH", api.EndpointMe+"/settings", httputil.WithJSONBody(patchSettings))
+	return errors.Wrap(err, "cannot update user settings API")
 }
