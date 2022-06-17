@@ -651,3 +651,9 @@ func (r *State) SetStatus(status discord.Status, custom *gateway.CustomUserStatu
 	err := r.FastRequest("PATCH", api.EndpointMe+"/settings", httputil.WithJSONBody(patchSettings))
 	return errors.Wrap(err, "cannot update user settings API")
 }
+
+// UserIsBlocked returns true if the user with the given ID is blocked by the
+// current user.
+func (r *State) UserIsBlocked(uID discord.UserID) bool {
+	return r.RelationshipState.IsBlocked(uID)
+}
