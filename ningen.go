@@ -291,6 +291,11 @@ func (s *State) MessageMentions(msg *discord.Message) MessageMentionFlags {
 		return 0
 	}
 
+	// Ignore messages from blocked users.
+	if s.UserIsBlocked(msg.Author.ID) {
+		return 0
+	}
+
 	var mutedGuild gateway.UserGuildSetting
 
 	// If there's guild:
