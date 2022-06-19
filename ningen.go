@@ -662,3 +662,22 @@ func (r *State) SetStatus(status discord.Status, custom *gateway.CustomUserStatu
 func (r *State) UserIsBlocked(uID discord.UserID) bool {
 	return r.RelationshipState.IsBlocked(uID)
 }
+
+// ChannelIsMuted returns true if the channel with the given ID is muted or if
+// it's in a category that's muted.
+func (r *State) ChannelIsMuted(chID discord.ChannelID, category bool) bool {
+	if r.MutedState.Channel(chID) {
+		return true
+	}
+
+	if !category {
+		return false
+	}
+
+	c, err := r.Cabinet.Channel(chID)
+	if err != nil || !c.ParentID.IsValid() {
+		return false
+	}
+
+	return r.MutedState.Channel(c.ParentID)
+}
