@@ -58,10 +58,15 @@ func NewState(state *state.State, r handlerrepo.AddHandler) *State {
 	})
 
 	r.AddSyncHandler(func(c *gateway.MessageCreateEvent) {
-		var mentions int
+		selfID := readstate.SelfID()
+		if c.Author.ID == selfID {
+			readstate.markRead(c.ChannelID, c.ID, false)
+			return
+		}
 
+		var mentions int
 		for _, u := range c.Mentions {
-			if u.ID == readstate.selfID {
+			if u.ID == selfID {
 				mentions++
 			}
 		}
@@ -70,6 +75,13 @@ func NewState(state *state.State, r handlerrepo.AddHandler) *State {
 	})
 
 	return readstate
+}
+
+func (r *State) SelfID() discord.UserID {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	return r.selfID
 }
 
 // ReadState gets the read state for a channel.
