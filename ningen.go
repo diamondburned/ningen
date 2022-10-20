@@ -531,6 +531,21 @@ func (s *State) AssertPermissions(chID discord.ChannelID, perms discord.Permissi
 	return nil
 }
 
+// LastMessage returns the last message ID in the given channel.
+func (r *State) LastMessage(chID discord.ChannelID) discord.MessageID {
+	msgs, _ := r.Cabinet.Messages(chID)
+	if len(msgs) > 0 {
+		return msgs[0].ID
+	}
+
+	ch, _ := r.Cabinet.Channel(chID)
+	if ch != nil {
+		return ch.LastMessageID
+	}
+
+	return 0
+}
+
 // UnreadIndication indicates the channel as either unread, mentioned (which
 // implies unread) or neither.
 type UnreadIndication uint8
@@ -558,8 +573,8 @@ func (r *State) ChannelIsUnread(chID discord.ChannelID) UnreadIndication {
 		return ChannelRead
 	}
 
-	ch, err := r.Cabinet.Channel(chID)
-	if err != nil || !ch.LastMessageID.IsValid() {
+	lastMsgID := r.LastMessage(chID)
+	if !lastMsgID.IsValid() {
 		return ChannelRead
 	}
 
@@ -569,7 +584,7 @@ func (r *State) ChannelIsUnread(chID discord.ChannelID) UnreadIndication {
 		return ChannelRead
 	}
 
-	if state.LastMessageID < ch.LastMessageID {
+	if state.LastMessageID < lastMsgID {
 		return ChannelUnread
 	}
 
@@ -578,16 +593,12 @@ func (r *State) ChannelIsUnread(chID discord.ChannelID) UnreadIndication {
 
 // GuildIsUnread returns true if the guild contains unread channels.
 func (r *State) GuildIsUnread(guildID discord.GuildID, types []discord.ChannelType) UnreadIndication {
-	if r.MutedState.Guild(guildID, false) {
-		return ChannelRead
-	}
-
 	chs, err := r.Cabinet.Channels(guildID)
 	if err != nil {
 		return ChannelRead
 	}
 
-	typeMap := [255]bool{}
+	typeMap := [128]bool{}
 	for _, typ := range types {
 		typeMap[typ] = true
 	}
@@ -601,6 +612,13 @@ func (r *State) GuildIsUnread(guildID discord.GuildID, types []discord.ChannelTy
 
 		if s := r.ChannelIsUnread(ch.ID); s > ind {
 			ind = s
+		}
+	}
+
+	if isMuted := r.MutedState.Guild(guildID, false); isMuted {
+		// Only show mentions for muted guilds.
+		if ind != ChannelMentioned {
+			return ChannelRead
 		}
 	}
 

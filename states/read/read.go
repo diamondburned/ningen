@@ -58,6 +58,13 @@ func NewState(state *state.State, r handlerrepo.AddHandler) *State {
 	})
 
 	r.AddSyncHandler(func(c *gateway.MessageCreateEvent) {
+		ch, _ := state.Cabinet.Channel(c.ChannelID)
+		if ch != nil {
+			cpy := *ch
+			cpy.LastMessageID = c.ID
+			state.ChannelSet(&cpy, true)
+		}
+
 		selfID := readstate.SelfID()
 		if c.Author.ID == selfID {
 			readstate.markRead(c.ChannelID, c.ID, false)
@@ -114,8 +121,10 @@ func (r *State) MarkUnread(chID discord.ChannelID, msgID discord.MessageID, ment
 		return
 	}
 
-	ch.LastMessageID = msgID
-	r.state.ChannelSet(ch, false)
+	if ch.LastMessageID < msgID {
+		ch.LastMessageID = msgID
+		r.state.ChannelSet(ch, false)
+	}
 
 	if msg, _ := r.state.Cabinet.Message(chID, msgID); msg != nil {
 		if msg.Author.ID == r.selfID {
@@ -164,11 +173,6 @@ func (r *State) markRead(chID discord.ChannelID, msgID discord.MessageID, sendac
 			ChannelID: chID,
 		}
 		r.states[chID] = rs
-	}
-
-	// If we've already marked the message as read.
-	if rs.LastMessageID >= msgID {
-		return
 	}
 
 	// Update.
