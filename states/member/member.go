@@ -12,6 +12,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	"github.com/diamondburned/ningen/v3/handlerrepo"
 	"github.com/pkg/errors"
 	"github.com/twmb/murmur3"
@@ -209,9 +210,14 @@ func (m *State) SearchMember(guildID discord.GuildID, query string) {
 	gd.lastSearch = time.Now()
 
 	go func() {
+		var queryVar option.String
+		if query != "" {
+			queryVar = option.NewString(query)
+		}
+
 		search := &gateway.RequestGuildMembersCommand{
 			GuildIDs:  []discord.GuildID{guildID},
-			Query:     query,
+			Query:     queryVar,
 			Presences: m.RequestPresences,
 			Limit:     m.SearchLimit,
 		}

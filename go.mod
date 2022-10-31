@@ -3,7 +3,7 @@ module github.com/diamondburned/ningen/v3
 go 1.16
 
 require (
-	github.com/diamondburned/arikawa/v3 v3.0.0-rc.6
+	github.com/diamondburned/arikawa/v3 v3.1.1-0.20221031113421-60ed12f3c05e
 	github.com/pkg/errors v0.9.1
 	github.com/twmb/murmur3 v1.1.3
 	github.com/yuin/goldmark v1.3.2
