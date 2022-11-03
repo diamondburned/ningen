@@ -32,6 +32,10 @@ func init() {
 	cancelledCtx = c
 }
 
+func init() {
+	gateway.ReadyEventKeepRaw = true
+}
+
 // ConnectedEvent is an event that's sent on Ready or Resumed. The event arrives
 // before all ningen's handlers are called.
 type ConnectedEvent struct {
