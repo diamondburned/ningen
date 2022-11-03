@@ -2,6 +2,7 @@
 package read
 
 import (
+	"encoding/json"
 	"log"
 	"sync"
 
@@ -42,12 +43,25 @@ func NewState(state *state.State, r handlerrepo.AddHandler) *State {
 	}
 
 	r.AddSyncHandler(func(r *gateway.ReadyEvent) {
+		// Discord sucks massive fucking balls.
+		// They sometimes do this. Probably because of the .capabilities field.
+		// Not sure why.
+		var undocumentedWeirdness struct {
+			ReadStates struct {
+				Entries []gateway.ReadState `json:"entries"`
+			} `json:"read_state"`
+		}
+		json.Unmarshal(r.RawEventBody, &undocumentedWeirdness)
+
 		readstate.mutex.Lock()
 		defer readstate.mutex.Unlock()
 
 		readstate.selfID = r.User.ID
 
 		for i, rs := range r.ReadStates {
+			readstate.states[rs.ChannelID] = &r.ReadStates[i]
+		}
+		for i, rs := range undocumentedWeirdness.ReadStates.Entries {
 			readstate.states[rs.ChannelID] = &r.ReadStates[i]
 		}
 	})
@@ -175,11 +189,14 @@ func (r *State) markRead(chID discord.ChannelID, msgID discord.MessageID, sendac
 		r.states[chID] = rs
 	}
 
+	// If we've already marked the message as read.
+	if rs.LastMessageID == msgID && rs.MentionCount == 0 {
+		return
+	}
+
 	// Update.
 	rs.LastMessageID = msgID
 	rs.MentionCount = 0
-
-	// log.Println("MarkRead called at", string(debug.Stack()))
 
 	// Send out Ack in the background, but only if we explicitly want to, that
 	// is, if MarkRead is called and sendAck is true. In the event that the
