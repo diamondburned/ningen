@@ -62,7 +62,7 @@ func NewState(state *state.State, r handlerrepo.AddHandler) *State {
 			readstate.states[rs.ChannelID] = &r.ReadStates[i]
 		}
 		for i, rs := range undocumentedWeirdness.ReadStates.Entries {
-			readstate.states[rs.ChannelID] = &r.ReadStates[i]
+			readstate.states[rs.ChannelID] = &undocumentedWeirdness.ReadStates.Entries[i]
 		}
 	})
 
