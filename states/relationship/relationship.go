@@ -11,22 +11,22 @@ import (
 
 type State struct {
 	mutex         sync.RWMutex
-	relationships map[discord.UserID]discord.Relationship
+	relationships map[discord.UserID]discord.RelationshipType
 }
 
 func NewState(r handlerrepo.AddHandler) *State {
 	rela := &State{
-		relationships: map[discord.UserID]discord.Relationship{},
+		relationships: map[discord.UserID]discord.RelationshipType{},
 	}
 
 	r.AddSyncHandler(func(r *gateway.ReadyEvent) {
 		rela.mutex.Lock()
 		defer rela.mutex.Unlock()
 
-		rela.relationships = make(map[discord.UserID]discord.Relationship, len(r.Relationships))
+		rela.relationships = make(map[discord.UserID]discord.RelationshipType, len(r.Relationships))
 
 		for _, rl := range r.Relationships {
-			rela.relationships[rl.UserID] = rl
+			rela.relationships[rl.UserID] = rl.Type
 		}
 	})
 
@@ -34,7 +34,7 @@ func NewState(r handlerrepo.AddHandler) *State {
 		rela.mutex.Lock()
 		defer rela.mutex.Unlock()
 
-		rela.relationships[add.UserID] = add.Relationship
+		rela.relationships[add.UserID] = add.Type
 	})
 
 	r.AddSyncHandler(func(rem *gateway.RelationshipRemoveEvent) {
@@ -47,15 +47,12 @@ func NewState(r handlerrepo.AddHandler) *State {
 	return rela
 }
 
-func (r *State) Each(fn func(*discord.Relationship) (stop bool)) {
+func (r *State) Each(fn func(discord.UserID, discord.RelationshipType) (stop bool)) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
 	for userID, rela := range r.relationships {
-		stop := fn(&rela)
-		r.relationships[userID] = rela
-
-		if stop {
+		if fn(userID, rela) {
 			return
 		}
 	}
@@ -67,11 +64,7 @@ func (r *State) Relationship(userID discord.UserID) discord.RelationshipType {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
-	if t, ok := r.relationships[userID]; ok {
-		return t.Type
-	}
-
-	return 0
+	return r.relationships[userID]
 }
 
 // IsBlocked returns if the user is blocked.
@@ -79,26 +72,22 @@ func (r *State) IsBlocked(userID discord.UserID) bool {
 	return r.Relationship(userID) == discord.BlockedRelationship
 }
 
-// BlockedUsers returns all blocked users.
-func (r *State) BlockedUsers() []discord.User {
+// BlockedUserIDs returns all blocked users.
+func (r *State) BlockedUserIDs() []discord.UserID {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
-	users := make([]discord.User, 0, len(r.relationships))
-
-	for _, relationship := range r.relationships {
-		if relationship.Type != discord.BlockedRelationship {
+	userIDs := make([]discord.UserID, 0, len(r.relationships))
+	for uID, relationship := range r.relationships {
+		if relationship != discord.BlockedRelationship {
 			continue
 		}
-		users = append(users, relationship.User)
+		userIDs = append(userIDs, uID)
 	}
 
-	sort.Slice(users, func(i, j int) bool {
-		if users[i].Username != users[j].Username {
-			return users[i].Username < users[j].Username
-		}
-		return users[i].Discriminator < users[j].Discriminator
+	sort.Slice(userIDs, func(i, j int) bool {
+		return userIDs[i] < userIDs[j]
 	})
 
-	return users
+	return userIDs
 }

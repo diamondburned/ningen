@@ -12,6 +12,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/diamondburned/arikawa/v3/utils/handler"
 	"github.com/diamondburned/arikawa/v3/utils/httputil"
+	"github.com/diamondburned/arikawa/v3/utils/json"
 	"github.com/diamondburned/arikawa/v3/utils/ws"
 	"github.com/diamondburned/ningen/v3/nstore"
 	"github.com/diamondburned/ningen/v3/states/emoji"
@@ -173,11 +174,8 @@ func FromState(s *state.State) *State {
 
 				s.PresenceSet(p.GuildID, &new, true)
 			}
-		}
 
-		// Only unblock if we have a ReadySupplemental to ensure that we have
-		// everything in the state.
-		if _, ok := v.(*gateway.ReadyEvent); ok {
+		case *gateway.ReadyEvent:
 			// Send to channel that unblocks Open() so applications don't access
 			// nil states and avoid data race.
 			select {
@@ -185,6 +183,8 @@ func FromState(s *state.State) *State {
 				// Since this channel is one-buffered, we can do this.
 			default:
 			}
+
+			state.hackReady(v)
 		}
 
 		switch v := v.(type) {
@@ -202,6 +202,54 @@ func FromState(s *state.State) *State {
 	})
 
 	return state
+}
+
+func (s *State) hackReady(ev *gateway.ReadyEvent) {
+	var extras readyEventExtras
+
+	if errs := json.PartialUnmarshal(ev.RawEventBody, &extras); len(errs) > 0 {
+		for _, err := range errs {
+			s.Handler.Call(&ws.BackgroundErrorEvent{
+				Err: errors.Wrap(err, "error with ningen.readyEventExtras"),
+			})
+		}
+		return
+	}
+
+	for _, user := range extras.Users {
+		// Hopefully the state is happy with us doing this. We really don't have
+		// a user store because it's such a backwards way of doing things, but
+		// we also don't know if existing code even uses this.
+		presence := &discord.Presence{
+			User:    user,
+			GuildID: 0,
+			Status:  discord.OfflineStatus,
+		}
+		s.Cabinet.PresenceSet(0, presence, true)
+	}
+
+	// This is also weird.
+	for _, ch := range extras.PrivateChannelsV2 {
+		if len(ch.RecipientIDs) == 0 || len(ch.DMRecipients) > 0 {
+			continue
+		}
+
+		ch.DMRecipients = make([]discord.User, len(ch.RecipientIDs))
+		for i, id := range ch.RecipientIDs {
+			u := discord.User{
+				ID: id,
+			}
+
+			presence, _ := s.Cabinet.Presence(0, id)
+			if presence != nil {
+				u = presence.User
+			}
+
+			ch.DMRecipients[i] = u
+		}
+
+		s.Cabinet.ChannelSet(&ch.Channel, true)
+	}
 }
 
 func (s *State) Open(ctx context.Context) error {
@@ -424,10 +472,10 @@ func (s *State) PrivateChannels() ([]discord.Channel, error) {
 	}
 
 	filtered := c[:0]
-	for _, ch := range filtered {
+	for _, ch := range c {
 		// This sometimes happens. It makes no sense for this to make it
 		// through!
-		if ch.Type == discord.GroupDM && len(ch.DMRecipients) == 0 {
+		if len(ch.DMRecipients) == 0 {
 			continue
 		}
 
@@ -649,19 +697,11 @@ func (s *State) ChannelCountUnreads(chID discord.ChannelID) int {
 	msgs, _ := s.Cabinet.Messages(chID)
 
 	readState := s.ReadState.ReadState(chID)
-	// We check if either the read state is not known at all or we're getting
-	// neither a mention nor a last read message, indicating that we've never
-	// read anything here.
 	if readState == nil || !readState.LastMessageID.IsValid() {
-		// We've never seen this channel before, so we might not have any
-		// messages. If we do, then we'll count them, otherwise, we'll just
-		// assume that there are 1 (one) unread message.
-		if msgs != nil {
-			unread = len(msgs)
-		} else {
-			unread = 1
-		}
-	} else if msgs != nil {
+		return 0
+	}
+
+	if msgs != nil {
 		// We've seen this channel before, so we'll count (if we can )the unread
 		// messages from the last read message.
 		for _, msg := range msgs {
