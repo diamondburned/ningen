@@ -423,6 +423,18 @@ func (s *State) PrivateChannels() ([]discord.Channel, error) {
 		return nil, err
 	}
 
+	filtered := c[:0]
+	for _, ch := range filtered {
+		// This sometimes happens. It makes no sense for this to make it
+		// through!
+		if ch.Type == discord.GroupDM && len(ch.DMRecipients) == 0 {
+			continue
+		}
+
+		filtered = append(filtered, ch)
+	}
+	c = filtered
+
 	sort.SliceStable(c, func(i, j int) bool {
 		return c[i].LastMessageID > c[j].LastMessageID
 	})
