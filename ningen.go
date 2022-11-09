@@ -126,7 +126,7 @@ func FromState(s *state.State) *State {
 	state.GuildState = guild.NewState(prehandler)
 	state.EmojiState = emoji.NewState(s.Cabinet)
 	state.MemberState = member.NewState(s, prehandler)
-	state.RelationshipState = relationship.NewState(prehandler)
+	state.RelationshipState = relationship.NewState(s.Cabinet, prehandler)
 
 	s.AddSyncHandler(func(v gateway.Event) {
 		switch v := v.(type) {
