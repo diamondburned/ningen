@@ -6,6 +6,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/state/store"
 	"github.com/diamondburned/ningen/v3/handlerrepo"
 )
 
@@ -14,7 +15,7 @@ type State struct {
 	relationships map[discord.UserID]discord.RelationshipType
 }
 
-func NewState(r handlerrepo.AddHandler) *State {
+func NewState(store store.PresenceStore, r handlerrepo.AddHandler) *State {
 	rela := &State{
 		relationships: map[discord.UserID]discord.RelationshipType{},
 	}
@@ -27,6 +28,17 @@ func NewState(r handlerrepo.AddHandler) *State {
 
 		for _, rl := range r.Relationships {
 			rela.relationships[rl.UserID] = rl.Type
+
+			if rl.User.ID == rl.UserID {
+				// Update our local presence state.
+				presence, _ := store.Presence(0, rl.UserID)
+				if presence != nil {
+					presence.User = rl.User
+				} else {
+					presence = &discord.Presence{User: rl.User}
+				}
+				store.PresenceSet(0, presence, true)
+			}
 		}
 	})
 
