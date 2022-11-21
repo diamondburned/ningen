@@ -364,11 +364,6 @@ func (s *State) MessageMentions(msg *discord.Message) MessageMentionFlags {
 		}
 
 		// TODO: roles
-
-		// If the guild is muted of all messages:
-		if mutedGuild.Muted {
-			return 0
-		}
 	}
 
 	var flags MessageMentionFlags
@@ -418,7 +413,6 @@ func (s *State) MessageMentions(msg *discord.Message) MessageMentionFlags {
 			}
 			return flags
 		}
-
 	}
 
 	// Is this from a DM? TODO: get a better check.
