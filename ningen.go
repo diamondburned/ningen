@@ -4,6 +4,7 @@ package ningen
 
 import (
 	"context"
+	"log"
 	"sort"
 
 	"github.com/diamondburned/arikawa/v3/api"
@@ -22,6 +23,7 @@ import (
 	"github.com/diamondburned/ningen/v3/states/note"
 	"github.com/diamondburned/ningen/v3/states/read"
 	"github.com/diamondburned/ningen/v3/states/relationship"
+	"github.com/diamondburned/ningen/v3/states/thread"
 	"github.com/pkg/errors"
 )
 
@@ -85,6 +87,7 @@ type State struct {
 	GuildState        *guild.State
 	EmojiState        *emoji.State
 	MemberState       *member.State
+	ThreadState       *thread.State
 	RelationshipState *relationship.State
 
 	initd  chan struct{} // nil after Open().
@@ -126,6 +129,7 @@ func FromState(s *state.State) *State {
 	state.GuildState = guild.NewState(prehandler)
 	state.EmojiState = emoji.NewState(s.Cabinet)
 	state.MemberState = member.NewState(s, prehandler)
+	state.ThreadState = thread.NewState(s, prehandler)
 	state.RelationshipState = relationship.NewState(s.Cabinet, prehandler)
 
 	s.AddSyncHandler(func(v gateway.Event) {
@@ -627,7 +631,7 @@ func (r *State) ChannelIsUnread(chID discord.ChannelID) UnreadIndication {
 		return ChannelMentioned
 	}
 
-	if r.MutedState.Channel(chID) || r.MutedState.Category(chID) {
+	if r.ChannelIsMuted(chID, true) {
 		return ChannelRead
 	}
 
@@ -772,18 +776,29 @@ func (r *State) UserIsBlocked(uID discord.UserID) bool {
 // ChannelIsMuted returns true if the channel with the given ID is muted or if
 // it's in a category that's muted.
 func (r *State) ChannelIsMuted(chID discord.ChannelID, category bool) bool {
+	// If the channel is configured to be muted, then it's muted.
 	if r.MutedState.Channel(chID) {
 		return true
 	}
 
-	if !category {
-		return false
-	}
-
 	c, err := r.Cabinet.Channel(chID)
-	if err != nil || !c.ParentID.IsValid() {
+	if err != nil {
+		log.Println("ningen: ChannelIsMuted: cannot get channel:", err)
 		return false
 	}
 
-	return r.MutedState.Channel(c.ParentID)
+	// Is the channel a thread? If so, check if the thread is joined.
+	switch c.Type {
+	case discord.GuildPublicThread, discord.GuildPrivateThread:
+		if !r.ThreadState.ThreadIsJoined(c.ID) {
+			return true
+		}
+	}
+
+	// If the channel is in a category, then check if the category is muted.
+	if c.ParentID.IsValid() && category {
+		return r.MutedState.Channel(c.ParentID)
+	}
+
+	return false
 }
