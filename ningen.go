@@ -660,18 +660,16 @@ func (r *State) GuildIsUnread(guildID discord.GuildID, types []discord.ChannelTy
 		return ChannelRead
 	}
 
-	typeMap := [128]bool{}
+	var typeMap [128]bool
 	for _, typ := range types {
 		typeMap[typ] = true
 	}
 
 	ind := ChannelRead
-
 	for _, ch := range chs {
 		if !typeMap[ch.Type] {
 			continue
 		}
-
 		if s := r.ChannelIsUnread(ch.ID); s > ind {
 			ind = s
 		}
@@ -775,7 +773,7 @@ func (r *State) UserIsBlocked(uID discord.UserID) bool {
 
 // ChannelIsMuted returns true if the channel with the given ID is muted or if
 // it's in a category that's muted.
-func (r *State) ChannelIsMuted(chID discord.ChannelID, category bool) bool {
+func (r *State) ChannelIsMuted(chID discord.ChannelID, checkParent bool) bool {
 	// If the channel is configured to be muted, then it's muted.
 	if r.MutedState.Channel(chID) {
 		return true
@@ -796,8 +794,8 @@ func (r *State) ChannelIsMuted(chID discord.ChannelID, category bool) bool {
 	}
 
 	// If the channel is in a category, then check if the category is muted.
-	if c.ParentID.IsValid() && category {
-		return r.MutedState.Channel(c.ParentID)
+	if c.ParentID.IsValid() && checkParent {
+		return r.ChannelIsMuted(c.ParentID, true)
 	}
 
 	return false
