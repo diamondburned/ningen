@@ -2,6 +2,8 @@ package discordmd
 
 import (
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
@@ -43,12 +45,18 @@ func (r *BasicRenderer) Render(w io.Writer, source []byte, n ast.Node) error {
 	// Wrap the current writer behind an unescaper.
 	w = UnescapeWriter(w)
 
+	walker := &basicRenderWalker{}
 	return ast.Walk(n, func(node ast.Node, enter bool) (ast.WalkStatus, error) {
-		return r.walker(w, source, node, enter), nil
+		return walker.walk(w, source, node, enter), nil
 	})
 }
 
-func (r *BasicRenderer) walker(w io.Writer, source []byte, n ast.Node, enter bool) ast.WalkStatus {
+type basicRenderWalker struct {
+	listIx     *int
+	listNested int
+}
+
+func (r *basicRenderWalker) walk(w io.Writer, source []byte, n ast.Node, enter bool) ast.WalkStatus {
 	switch n := n.(type) {
 	case *ast.Document:
 		// noop
@@ -61,7 +69,7 @@ func (r *BasicRenderer) walker(w io.Writer, source []byte, n ast.Node, enter boo
 					// We only call when entering, since we don't want to trigger a
 					// hard new line after each paragraph.
 					if enter {
-						return r.walker(w, source, node, enter), nil
+						return r.walk(w, source, node, enter), nil
 					}
 					return ast.WalkContinue, nil
 				})
@@ -75,14 +83,13 @@ func (r *BasicRenderer) walker(w io.Writer, source []byte, n ast.Node, enter boo
 			io.WriteString(w, "\n")
 		}
 	case *ast.FencedCodeBlock:
+		io.WriteString(w, "\n")
 		if enter {
 			// Write the body
 			for i := 0; i < n.Lines().Len(); i++ {
 				line := n.Lines().At(i)
 				io.WriteString(w, "| "+string(line.Value(source)))
 			}
-		} else {
-			io.WriteString(w, "\n")
 		}
 	case *ast.Link:
 		if enter {
@@ -109,6 +116,47 @@ func (r *BasicRenderer) walker(w io.Writer, source []byte, n ast.Node, enter boo
 			case n.GuildRole != nil:
 				io.WriteString(w, "@"+n.GuildRole.Name)
 			}
+		}
+	case *ast.Heading:
+		io.WriteString(w, "\n")
+		indent := strings.Repeat("  ", n.Level-1)
+		if enter {
+			io.WriteString(w, indent)
+		} else {
+			io.WriteString(w, indent)
+
+			line := n.Lines().At(0)
+			sep := "="
+			if n.Level > 1 {
+				sep = "-"
+			}
+			io.WriteString(w, strings.Repeat(sep, len(line.Value(source))))
+			io.WriteString(w, "\n")
+		}
+	case *ast.List:
+		if n.IsOrdered() {
+			r.listIx = &n.Start
+		} else {
+			r.listIx = nil
+		}
+		if enter {
+			io.WriteString(w, "\n")
+			r.listNested++
+		} else {
+			r.listNested--
+		}
+	case *ast.ListItem:
+		if enter {
+			io.WriteString(w, strings.Repeat("  ", r.listNested-1))
+			if r.listIx != nil {
+				io.WriteString(w, strconv.Itoa(*r.listIx))
+				io.WriteString(w, ". ")
+				*r.listIx++
+			} else {
+				io.WriteString(w, "- ")
+			}
+		} else {
+			io.WriteString(w, "\n")
 		}
 	case *ast.String:
 		if enter {

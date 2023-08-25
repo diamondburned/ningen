@@ -25,7 +25,7 @@ func (e *Inline) Dump(source []byte, level int) {
 	}, nil)
 }
 
-var inlineTriggers = []byte{'*', '_', '|', '~', '`'}
+var inlineTriggers = []byte{'*', '_', '|', '~'}
 
 type inlineDelimiterProcessor struct {
 	char byte
@@ -58,14 +58,12 @@ func (p *inlineDelimiterProcessor) CanOpenCloser(opener, closer *parser.Delimite
 		p.attr = AttrItalics
 	case p.char == '*' && consumes == 2: // **
 		p.attr = AttrBold
+	case p.char == '*' && consumes == 3: // ***
+		p.attr = AttrBold | AttrItalics
 	case p.char == '|' && consumes == 2: // ||
 		p.attr = AttrSpoiler
 	case p.char == '~' && consumes == 2: // ~~
 		p.attr = AttrStrikethrough
-	case p.char == '`' && consumes == 1: // `
-		p.attr = AttrMonospace
-	case p.char == '`' && consumes == 2: // ``
-		p.attr = AttrMonospace
 	default:
 		return false
 	}
@@ -102,4 +100,14 @@ func (inline) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.N
 	pc.PushDelimiter(node)
 
 	return node
+}
+
+type inlineCodeSpan struct{ parser.InlineParser }
+
+func (p inlineCodeSpan) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.Node {
+	node := p.InlineParser.Parse(parent, block, pc).(*ast.CodeSpan)
+	return &Inline{
+		BaseInline: node.BaseInline,
+		Attr:       AttrMonospace,
+	}
 }

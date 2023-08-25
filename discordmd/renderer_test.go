@@ -1,7 +1,6 @@
 package discordmd
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -14,6 +13,9 @@ import (
 //go:embed renderer_test.txt
 var message string
 
+//go:embed renderer_test_want.txt
+var messageWant string
+
 func TestRenderer(t *testing.T) {
 	p := parser.NewParser(
 		parser.WithBlockParsers(BlockParsers()...),
@@ -23,6 +25,9 @@ func TestRenderer(t *testing.T) {
 	node := p.Parse(text.NewReader([]byte(message)))
 	buff := strings.Builder{}
 	DefaultRenderer.Render(&buff, []byte(message), node)
+	t.Log("\n" + buff.String())
 
-	fmt.Println(buff.String())
+	if strings.TrimSpace(buff.String()) != strings.TrimSpace(messageWant) {
+		t.Error("renderer output does not match")
+	}
 }

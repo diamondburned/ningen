@@ -21,3 +21,13 @@ func main() {
 [test](https://google.com)
 
 **bold and *italics***
+# heading 1
+## heading 2
+### heading 3
+- list item 1
+  - list item 2
+- list item 3
+  - list item 4
+1. list item 1
+   1. list item 2
+   2. list item 3
