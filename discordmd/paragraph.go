@@ -47,6 +47,12 @@ func (b paragraph) Close(node ast.Node, r text.Reader, pc parser.Context) {
 	}
 
 	lines := node.Lines()
+	if lines.Len() != 0 {
+		length := lines.Len()
+		lastLine := node.Lines().At(length - 1)
+		node.Lines().Set(length-1, lastLine.TrimRightSpace(r.Source()))
+	}
+
 	if lines.Len() == 0 {
 		node.Parent().RemoveChild(node.Parent(), node)
 		return
