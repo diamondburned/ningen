@@ -16,7 +16,6 @@ func (b paragraph) Trigger() []byte {
 
 func (b paragraph) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, parser.State) {
 	_, segment := r.PeekLine()
-	// segment = segment.TrimLeftSpace(r.Source())
 	if segment.IsEmpty() {
 		return nil, parser.NoChildren
 	}
@@ -30,7 +29,6 @@ func (b paragraph) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node,
 
 func (b paragraph) Continue(node ast.Node, r text.Reader, pc parser.Context) parser.State {
 	_, segment := r.PeekLine()
-	// segment = segment.TrimLeftSpace(r.Source())
 	if segment.IsEmpty() {
 		return parser.Close
 	}
@@ -49,13 +47,6 @@ func (b paragraph) Close(node ast.Node, r text.Reader, pc parser.Context) {
 	}
 
 	lines := node.Lines()
-	if lines.Len() != 0 {
-		// trim trailing spaces
-		length := lines.Len()
-		lastLine := node.Lines().At(length - 1)
-		node.Lines().Set(length-1, lastLine.TrimRightSpace(r.Source()))
-	}
-
 	if lines.Len() == 0 {
 		node.Parent().RemoveChild(node.Parent(), node)
 		return
