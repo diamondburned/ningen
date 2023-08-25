@@ -105,9 +105,12 @@ func (inline) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.N
 type inlineCodeSpan struct{ parser.InlineParser }
 
 func (p inlineCodeSpan) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.Node {
-	node := p.InlineParser.Parse(parent, block, pc).(*ast.CodeSpan)
-	return &Inline{
-		BaseInline: node.BaseInline,
-		Attr:       AttrMonospace,
+	node, ok := p.InlineParser.Parse(parent, block, pc).(*ast.CodeSpan)
+	if ok {
+		return &Inline{
+			BaseInline: node.BaseInline,
+			Attr:       AttrMonospace,
+		}
 	}
+	return node
 }
