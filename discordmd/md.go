@@ -1,6 +1,8 @@
 package discordmd
 
 import (
+	"log"
+
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/state/store"
 	"github.com/yuin/goldmark/ast"
@@ -35,6 +37,8 @@ func ParseWithMessage(b []byte, s store.Cabinet, m *discord.Message, msg bool) a
 		parser.WithBlockParsers(BlockParsers()...),
 		parser.WithInlineParsers(inlineParsers...),
 	)
+
+	log.Printf("Parsing content: %q", string(b))
 
 	return p.Parse(text.NewReader(b), parser.WithContext(ctx))
 }

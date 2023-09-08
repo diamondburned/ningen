@@ -26,7 +26,8 @@ func InlineParsers() []util.PrioritizedValue {
 	return []util.PrioritizedValue{
 		util.Prioritized(fenced{}, 100), // code blocks, prioritized
 		util.Prioritized(&emoji{}, 200), // (*emoji).Parse()
-		util.Prioritized(inlineCodeSpan{parser.NewCodeSpanParser()}, 300),
+		util.Prioritized(inlineCodeSpan{}, 300),
+		// util.Prioritized(parser.NewCodeSpanParser(), 300),
 		util.Prioritized(inline{}, 350),
 		util.Prioritized(mention{}, 400),
 		util.Prioritized(autolink{}, 500),

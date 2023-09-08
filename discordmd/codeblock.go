@@ -100,11 +100,11 @@ func (b fenced) next(node ast.Node, r text.Reader, pc parser.Context) parser.Sta
 	pos, padding := util.DedentPositionPadding(line, r.LineOffset(), segment.Padding, 0)
 
 	// start+i accounts for everything before end (```)
-	var start, stop = segment.Start + pos, segment.Start + i
+	start, stop := segment.Start+pos, segment.Start+i
 
 	// Since we're assigning this segment a Start, IsEmpty() would fail if
 	// seg.End is not touched.
-	var seg = text.Segment{
+	seg := text.Segment{
 		Start:   start,
 		Stop:    stop,
 		Padding: padding,

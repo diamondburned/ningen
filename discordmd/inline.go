@@ -4,6 +4,7 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 )
 
 type Inline struct {
@@ -102,15 +103,50 @@ func (inline) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.N
 	return node
 }
 
-type inlineCodeSpan struct{ parser.InlineParser }
+type inlineCodeSpan struct{}
+
+var _ parser.InlineParser = inlineCodeSpan{}
+
+func (p inlineCodeSpan) Trigger() []byte {
+	return []byte{'`'}
+}
 
 func (p inlineCodeSpan) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.Node {
-	node, ok := p.InlineParser.Parse(parent, block, pc).(*ast.CodeSpan)
-	if ok {
-		return &Inline{
-			BaseInline: node.BaseInline,
-			Attr:       AttrMonospace,
-		}
+	line, startSegment := block.PeekLine()
+	opener := 0
+	for ; opener < len(line) && line[opener] == '`'; opener++ {
 	}
+	block.Advance(opener)
+	l, pos := block.Position()
+	node := &Inline{Attr: AttrMonospace}
+	for {
+		line, segment := block.PeekLine()
+		if line == nil {
+			block.SetPosition(l, pos)
+			return ast.NewTextSegment(startSegment.WithStop(startSegment.Start + opener))
+		}
+		for i := 0; i < len(line); i++ {
+			c := line[i]
+			if c == '`' {
+				oldi := i
+				for ; i < len(line) && line[i] == '`'; i++ {
+				}
+				closure := i - oldi
+				if closure == opener && (i >= len(line) || line[i] != '`') {
+					segment = segment.WithStop(segment.Start + i - closure)
+					if !segment.IsEmpty() {
+						node.AppendChild(node, ast.NewRawTextSegment(segment))
+					}
+					block.Advance(i)
+					goto end
+				}
+			}
+		}
+		if !util.IsBlank(line) {
+			node.AppendChild(node, ast.NewRawTextSegment(segment))
+		}
+		block.AdvanceLine()
+	}
+end:
 	return node
 }
