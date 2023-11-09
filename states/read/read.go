@@ -6,7 +6,6 @@ import (
 	"log"
 	"sync"
 
-	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
@@ -31,9 +30,6 @@ type State struct {
 	states map[discord.ChannelID]*gateway.ReadState
 
 	selfID discord.UserID
-
-	lastAck  api.Ack
-	ackMutex sync.Mutex
 }
 
 func NewState(state *state.State, r handlerrepo.AddHandler) *State {
@@ -229,12 +225,7 @@ func (r *State) markRead(chID discord.ChannelID, msgID discord.MessageID, sendac
 }
 
 func (r *State) ack(chID discord.ChannelID, msgID discord.MessageID) {
-	// Atomically guard the last ack struct.
-	r.ackMutex.Lock()
-	defer r.ackMutex.Unlock()
-
-	// Send over Ack.
-	if err := r.state.Ack(chID, msgID, &r.lastAck); err != nil {
+	if err := r.state.Ack(chID, msgID, nil); err != nil {
 		log.Println("Discord: message ack failed:", err)
 	}
 }
