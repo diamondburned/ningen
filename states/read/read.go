@@ -31,9 +31,6 @@ type State struct {
 	states map[discord.ChannelID]*gateway.ReadState
 
 	selfID discord.UserID
-
-	lastAck  api.Ack
-	ackMutex sync.Mutex
 }
 
 func NewState(state *state.State, r handlerrepo.AddHandler) *State {
@@ -191,10 +188,12 @@ func (r *State) markRead(chID discord.ChannelID, msgID discord.MessageID, sendac
 
 	// If we've already marked the message as read.
 	if rs.LastMessageID == msgID && rs.MentionCount == 0 {
+		// log.Println("ningen: NOT acking", chID, "for message", msgID)
 		return
 	}
 
 	// Update.
+	// prevMessageID := rs.LastMessageID
 	rs.LastMessageID = msgID
 	rs.MentionCount = 0
 
@@ -203,9 +202,15 @@ func (r *State) markRead(chID discord.ChannelID, msgID discord.MessageID, sendac
 	// gateway receives an Ack, we don't want to send another one of the same.
 	if sendack {
 		m, err := r.state.Cabinet.Message(chID, msgID)
+		if err != nil {
+			// log.Println("ningen: trying to ack unknown message", msgID, "in channel", chID)
+			return
+		}
+
 		// If there is an error or there is none and we know this message isn't
 		// ours, then ack.
-		if err != nil || m.Author.ID != r.selfID {
+		if m.Author.ID != r.selfID {
+			// log.Println("ningen: actually acking", chID, "for message", msgID, "was", prevMessageID)
 			go r.ack(chID, msgID)
 		}
 	}
@@ -229,12 +234,7 @@ func (r *State) markRead(chID discord.ChannelID, msgID discord.MessageID, sendac
 }
 
 func (r *State) ack(chID discord.ChannelID, msgID discord.MessageID) {
-	// Atomically guard the last ack struct.
-	r.ackMutex.Lock()
-	defer r.ackMutex.Unlock()
-
-	// Send over Ack.
-	if err := r.state.Ack(chID, msgID, &r.lastAck); err != nil {
+	if err := r.state.Ack(chID, msgID, &api.Ack{}); err != nil {
 		log.Println("Discord: message ack failed:", err)
 	}
 }
