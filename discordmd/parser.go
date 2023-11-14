@@ -13,9 +13,10 @@ type Heading = ast.Heading
 // BlockParsers returns a list of block parsers.
 func BlockParsers() []util.PrioritizedValue {
 	return []util.PrioritizedValue{
+		util.Prioritized(defaultFencedCodeBlockParser, 10),
 		util.Prioritized(parser.NewATXHeadingParser(), 100),
 		util.Prioritized(parser.NewListParser(), 300),
-		util.Prioritized(parser.NewListItemParser(), 400),
+		util.Prioritized(newListItemParser(), 400),
 		util.Prioritized(blockquote{}, 500),
 		util.Prioritized(paragraph{}, 1000),
 	}
@@ -24,7 +25,6 @@ func BlockParsers() []util.PrioritizedValue {
 // InlineParsers returns a list of inline parsers.
 func InlineParsers() []util.PrioritizedValue {
 	return []util.PrioritizedValue{
-		util.Prioritized(fenced{}, 100), // code blocks, prioritized
 		util.Prioritized(&emoji{}, 200), // (*emoji).Parse()
 		util.Prioritized(inlineCodeSpan{}, 300),
 		// util.Prioritized(parser.NewCodeSpanParser(), 300),

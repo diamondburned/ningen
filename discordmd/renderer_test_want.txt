@@ -3,11 +3,6 @@ this is a test. https://google.com strictly URL.
 > wacky blockquote
 > fml
 > >>> bruh
-| package main
-| 
-| func main() {
-| 	fmt.Println("Bruh moment.")
-| }
 
 | package main
 | 
@@ -15,15 +10,26 @@ this is a test. https://google.com strictly URL.
 | 	fmt.Println("Bruh moment.")
 | }
 
-| bad codeblock
 
+| package main
+| 
+| func main() {
+| 	fmt.Println("Bruh moment.")
+| }
+
+bad codeblock
  (https://google.com)test
 
+`mah man
+
 bold and italics
+
 heading 1
 =========
+
   heading 2
   ---------
+
     heading 3
     ---------
 
@@ -37,3 +43,4 @@ heading 1
 1. list item 1
   1. list item 2
   2. list item 3
+

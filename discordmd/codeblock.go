@@ -9,173 +9,120 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
-var fencedCodeBlockInfoKey = parser.NewContextKey()
+type fencedCodeBlockParser struct {
+}
 
-type fenced struct{}
+var defaultFencedCodeBlockParser = &fencedCodeBlockParser{}
+
 type fenceData struct {
+	char   byte
+	indent int
 	length int
 	node   ast.Node
 }
 
-func (b fenced) Trigger() []byte {
-	return []byte{'`'}
+var fencedCodeBlockInfoKey = parser.NewContextKey()
+
+func (b *fencedCodeBlockParser) Trigger() []byte {
+	return nil
 }
 
-func (b fenced) Parse(p ast.Node, r text.Reader, pc parser.Context) ast.Node {
-	n, _ := b.open(p, r, pc)
-	if n == nil {
-		return nil
+func (b *fencedCodeBlockParser) Open(parent ast.Node, reader text.Reader, pc parser.Context) (ast.Node, parser.State) {
+	line, segment := reader.PeekLine()
+	pos := pc.BlockOffset()
+	for ; pos < len(line) && line[pos] != '`'; pos++ {
 	}
-
-	// Crawl until b.next is done:
-	for state := parser.Continue; state != parser.Close; state = b.next(n, r, pc) {
+	if pos < 0 || pos == len(line) || line[pos] != '`' {
+		return nil, parser.NoChildren
 	}
-
-	// Close:
-	b.close(n, r, pc)
-
-	return n
-}
-
-func (b fenced) open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, parser.State) {
-	line, segment := r.PeekLine()
-
-	i := 0
-	for ; i < len(line) && line[i] == '`'; i++ {
+	findent := pos
+	fenceChar := line[pos]
+	i := pos
+	for ; i < len(line) && line[i] == fenceChar; i++ {
 	}
-
-	oFenceLength := i
-
-	// If there are less than 3 backticks:
+	oFenceLength := i - pos
 	if oFenceLength < 3 {
 		return nil, parser.NoChildren
 	}
-
-	// Advance through the backticks
-	r.Advance(oFenceLength)
-
-	node := ast.NewFencedCodeBlock(nil)
-
-	// If this isn't the last thing in the line: (```<language>)
+	var info *ast.Text
 	if i < len(line)-1 {
 		rest := line[i:]
-		infoStart, infoStop := segment.Start-segment.Padding+i, segment.Stop
-
-		if len(rest) > 0 && infoStart < infoStop && bytes.IndexByte(rest, '\n') > -1 {
-			// Trim trailing whitespaces:
-			left := util.TrimLeftSpaceLength(rest)
-			right := util.TrimRightSpaceLength(rest)
-
-			// If there is no space:
-			if left < right && bytes.IndexByte(rest, ' ') == -1 {
-				seg := text.NewSegment(infoStart+left, infoStop-right)
-				node.Info = ast.NewTextSegment(seg)
-				r.Advance(infoStop - infoStart)
+		left := util.TrimLeftSpaceLength(rest)
+		right := util.TrimRightSpaceLength(rest)
+		if left < len(rest)-right {
+			infoStart, infoStop := segment.Start-segment.Padding+i+left, segment.Stop-right
+			value := rest[left : len(rest)-right]
+			if fenceChar == '`' && bytes.IndexByte(value, '`') > -1 {
+				return nil, parser.NoChildren
+			} else if infoStart != infoStop {
+				info = ast.NewTextSegment(text.NewSegment(infoStart, infoStop))
 			}
 		}
-	} else {
-		// Else consume the rest of the line.
-		r.AdvanceLine()
 	}
-
-	pc.Set(fencedCodeBlockInfoKey, &fenceData{oFenceLength, node})
-	return node, parser.NoChildren
+	node := ast.NewFencedCodeBlock(info)
+	pc.Set(fencedCodeBlockInfoKey, &fenceData{fenceChar, findent, oFenceLength, node})
+	return node, parser.Continue | parser.NoChildren
 }
 
-func (b fenced) next(node ast.Node, r text.Reader, pc parser.Context) parser.State {
-	line, segment := r.PeekLine()
-	if len(line) == 0 {
-		return parser.Close
-	}
-
+func (b *fencedCodeBlockParser) Continue(node ast.Node, reader text.Reader, pc parser.Context) parser.State {
+	line, segment := reader.PeekLine()
 	fdata := pc.Get(fencedCodeBlockInfoKey).(*fenceData)
-	_, pos := util.IndentWidth(line, r.LineOffset())
 
-	// Crawl i to ```
-	i := pos
-	for ; i < len(line) && line[i] != '`'; i++ {
-	}
-
-	// Is there a string literal? Write it.
-	pos, padding := util.DedentPositionPadding(line, r.LineOffset(), segment.Padding, 0)
-
-	// start+i accounts for everything before end (```)
-	start, stop := segment.Start+pos, segment.Start+i
-
-	// Since we're assigning this segment a Start, IsEmpty() would fail if
-	// seg.End is not touched.
-	seg := text.Segment{
-		Start:   start,
-		Stop:    stop,
-		Padding: padding,
-	}
-	r.AdvanceAndSetPadding(stop-start, padding)
-
-	defer func() {
-		// Append this at the end of the function, as the block below might
-		// reuse our text segment.
-		node.Lines().Append(seg)
-	}()
-
-	// If found:
-	if i != len(line) {
-		// Update the starting position:
-		pos = i
-
-		// Iterate until we're out of backticks:
-		for ; i < len(line) && line[i] == '`'; i++ {
+	w, pos := util.IndentWidth(line, reader.LineOffset())
+	if w < 4 {
+		i := pos
+		for ; i < len(line) && line[i] == fdata.char; i++ {
 		}
-
-		// Do we have enough (3 or more) backticks?
-		// If yes, end the codeblock properly.
-		if length := i - pos; length >= fdata.length {
-			r.Advance(length)
+		length := i - pos
+		if length >= fdata.length && util.IsBlank(line[i:]) {
+			newline := 1
+			if line[len(line)-1] != '\n' {
+				newline = 0
+			}
+			reader.Advance(segment.Stop - segment.Start - newline + segment.Padding)
 			return parser.Close
-		} else {
-			// No, treat the rest as text:
-			seg.Stop = segment.Stop
-			r.Advance(segment.Stop - stop)
 		}
 	}
-
+	pos, padding := util.IndentPositionPadding(line, reader.LineOffset(), segment.Padding, fdata.indent)
+	if pos < 0 {
+		pos = util.FirstNonSpacePosition(line)
+		if pos < 0 {
+			pos = 0
+		}
+		padding = 0
+	}
+	seg := text.NewSegmentPadding(segment.Start+pos, segment.Stop, padding)
+	// if code block line starts with a tab, keep a tab as it is.
+	if padding != 0 {
+		preserveLeadingTabInCodeBlock(&seg, reader, fdata.indent)
+	}
+	node.Lines().Append(seg)
+	reader.AdvanceAndSetPadding(segment.Stop-segment.Start-pos-1, padding)
 	return parser.Continue | parser.NoChildren
 }
 
-func (b fenced) close(node ast.Node, r text.Reader, pc parser.Context) {
+func (b *fencedCodeBlockParser) Close(node ast.Node, reader text.Reader, pc parser.Context) {
 	fdata := pc.Get(fencedCodeBlockInfoKey).(*fenceData)
 	if fdata.node == node {
 		pc.Set(fencedCodeBlockInfoKey, nil)
 	}
-
-	lines := node.Lines()
-
-	if length := lines.Len(); length > 0 {
-		// Trim first whitespace
-		first := lines.At(0)
-		lines.Set(0, first.TrimLeftSpace(r.Source()))
-
-		// Trim last new line
-		last := lines.At(length - 1)
-		if last.Len() == 0 {
-			lines.SetSliced(0, length-1)
-			length--
-		}
-
-		// If we've sliced everything away.
-		if length == 0 {
-			return
-		}
-
-		// Trim the new last line's trailing whitespace
-		last = lines.At(length - 1)
-		lines.Set(length-1, last.TrimRightSpace(r.Source()))
-	}
 }
 
-func (b fenced) CanInterruptParagraph() bool {
+func (b *fencedCodeBlockParser) CanInterruptParagraph() bool {
 	return true
 }
 
-func (b fenced) CanAcceptIndentedLine() bool {
+func (b *fencedCodeBlockParser) CanAcceptIndentedLine() bool {
 	return false
+}
+
+func preserveLeadingTabInCodeBlock(segment *text.Segment, reader text.Reader, indent int) {
+	offsetWithPadding := reader.LineOffset() + indent
+	sl, ss := reader.Position()
+	reader.SetPosition(sl, text.NewSegment(ss.Start-1, ss.Stop))
+	if offsetWithPadding == reader.LineOffset() {
+		segment.Padding = 0
+		segment.Start--
+	}
+	reader.SetPosition(sl, ss)
 }

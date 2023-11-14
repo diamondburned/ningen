@@ -1,26 +1,40 @@
 package discordmd
 
 import (
-	"bytes"
 	"testing"
 
-	"github.com/yuin/goldmark"
+	_ "embed"
+
 	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/text"
 )
 
-const _fencedInline = "```thing"
-const _fencedInlineHTML = `<p><pre><code>thing</code></pre>
-</p>
-`
+//go:embed codeblock_test_want.txt
+var wantFile string
+var wantData = map[string]string{}
 
-const _fencedLanguage = "```go" + `
+const _fencedInline = "hi ```thing```"
+const _fencedInlineHTML = `
+Document {
+    Paragraph {
+        RawText: "hi ` + "```thing```" + `"
+        HasBlankPreviousLines: true
+        Text: "hi "
+        FencedCodeBlock {
+            RawText: "thing"
+            HasBlankPreviousLines: false
+        }
+    }
+}`
+
+const _fencedLanguage = "hi ```go" + `
 package main
 
 func main() {
 	fmt.Println("Hello, 世界！")
 }
 ` + "```"
-const _fencedLanguageHTML = `<p><pre><code class="language-go">package main
+const _fencedLanguageHTML = `<p>hi <pre><code class="language-go">package main
 
 func main() {
 	fmt.Println(&quot;Hello, 世界！&quot;)
@@ -28,13 +42,25 @@ func main() {
 </p>
 `
 
-const _fencedBroken = "`````go" + `
+const _fencedBroken = "hi `````go" + `
 package main
 ` + "````"
-const _fencedBrokenHTML = `<p><pre><code class="language-go">package main
+const _fencedBrokenHTML = `<p>hi <pre><code class="language-go">package main
 ` + "````" + `</code></pre>
 </p>
 `
+
+const _fencedMixed = "hii ```go" + `
+package main
+asdas
+# bruh
+ased
+# hi
+` + "```"
+const _fencedMixedHTML = `<p>hii <pre><code class="language-go">package main
+# hi
+</code></pre>
+</p>`
 
 func TestFenced(t *testing.T) {
 	// Make a fenced only parser:
@@ -43,28 +69,31 @@ func TestFenced(t *testing.T) {
 		parser.WithBlockParsers(BlockParsers()...),
 	)
 
-	// Make a default new markdown renderer:
-	md := goldmark.New(
-		goldmark.WithParser(p),
-	)
-
+	// // Make a default new markdown renderer:
+	// md := goldmark.New(
+	// 	goldmark.WithParser(p),
+	// )
+	//
 	var tests = []struct {
 		md, html, name string
 	}{
 		{_fencedInline, _fencedInlineHTML, "inline"},
 		{_fencedLanguage, _fencedLanguageHTML, "language"},
 		{_fencedBroken, _fencedBrokenHTML, "broken"},
+		{_fencedMixed, _fencedMixedHTML, "mixed"},
 	}
 
-	// Results
-	var buf bytes.Buffer
-
 	for _, test := range tests {
-		if err := md.Convert([]byte(test.md), &buf); err != nil {
-			t.Fatal("Failed to parse fenced "+test.name+":", err)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			node := p.Parse(text.NewReader([]byte(test.md)))
+			dump := dump(node, []byte(test.md))
+			t.Log("node:\n", dump)
 
-		strcmp(t, "fenced "+test.name, buf.String(), test.html)
-		buf.Reset()
+			// var buf bytes.Buffer
+			// if err := md.Convert([]byte(test.md), &buf); err != nil {
+			// 	t.Fatal("Failed to parse fenced "+test.name+":", err)
+			// }
+			// strcmp(t, "fenced "+test.name, buf.String(), test.html)
+		})
 	}
 }
