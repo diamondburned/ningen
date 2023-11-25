@@ -9,10 +9,6 @@ import (
 	"github.com/yuin/goldmark/text"
 )
 
-//go:embed codeblock_test_want.txt
-var wantFile string
-var wantData = map[string]string{}
-
 const _fencedInline = "hi ```thing```"
 const _fencedInlineHTML = `
 Document {
