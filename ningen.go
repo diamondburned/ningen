@@ -606,9 +606,17 @@ const (
 	ChannelMentioned
 )
 
+// UnreadOpts are options for the Unread function.
+type UnreadOpts struct {
+	// IncludeMutedCategories includes channels in muted categories.
+	// This means that if a category is muted, but a channel within it is not,
+	// the channel will still be considered unread.
+	IncludeMutedCategories bool
+}
+
 // ChannelIsUnread returns true if the channel with the given ID has unread
 // messages.
-func (r *State) ChannelIsUnread(chID discord.ChannelID) UnreadIndication {
+func (r *State) ChannelIsUnread(chID discord.ChannelID, opts UnreadOpts) UnreadIndication {
 	state := r.ReadState.ReadState(chID)
 	if state == nil || !state.LastMessageID.IsValid() {
 		return ChannelRead
@@ -619,7 +627,7 @@ func (r *State) ChannelIsUnread(chID discord.ChannelID) UnreadIndication {
 		return ChannelMentioned
 	}
 
-	if r.ChannelIsMuted(chID, true) {
+	if r.ChannelIsMuted(chID, opts) {
 		return ChannelRead
 	}
 
@@ -641,24 +649,31 @@ func (r *State) ChannelIsUnread(chID discord.ChannelID) UnreadIndication {
 	return ChannelRead
 }
 
+// GuildUnreadOpts are options for the GuildIsUnread function.
+type GuildUnreadOpts struct {
+	UnreadOpts
+	// Types is a list of channel types to check for unread messages.
+	Types []discord.ChannelType
+}
+
 // GuildIsUnread returns true if the guild contains unread channels.
-func (r *State) GuildIsUnread(guildID discord.GuildID, types []discord.ChannelType) UnreadIndication {
+func (r *State) GuildIsUnread(guildID discord.GuildID, opts GuildUnreadOpts) UnreadIndication {
 	chs, err := r.Cabinet.Channels(guildID)
 	if err != nil {
 		return ChannelRead
 	}
 
 	var typeMap [128]bool
-	for _, typ := range types {
+	for _, typ := range opts.Types {
 		typeMap[typ] = true
 	}
 
 	ind := ChannelRead
 	for _, ch := range chs {
-		if !typeMap[ch.Type] {
+		if opts.Types != nil && !typeMap[ch.Type] {
 			continue
 		}
-		if s := r.ChannelIsUnread(ch.ID); s > ind {
+		if s := r.ChannelIsUnread(ch.ID, opts.UnreadOpts); s > ind {
 			ind = s
 		}
 	}
@@ -674,7 +689,7 @@ func (r *State) GuildIsUnread(guildID discord.GuildID, types []discord.ChannelTy
 }
 
 // ChanneCountUnreads returns the number of unread messages in the channel.
-func (s *State) ChannelCountUnreads(chID discord.ChannelID) int {
+func (s *State) ChannelCountUnreads(chID discord.ChannelID, opts UnreadOpts) int {
 	var unread int
 
 	// Grab our known messages so we can count the unread ones.
@@ -696,7 +711,7 @@ func (s *State) ChannelCountUnreads(chID discord.ChannelID) int {
 				break
 			}
 		}
-	} else if unread == 0 && s.ChannelIsUnread(chID) != ChannelRead {
+	} else if unread == 0 && s.ChannelIsUnread(chID, opts) != ChannelRead {
 		unread = 1
 	}
 
@@ -761,7 +776,7 @@ func (r *State) UserIsBlocked(uID discord.UserID) bool {
 
 // ChannelIsMuted returns true if the channel with the given ID is muted or if
 // it's in a category that's muted.
-func (r *State) ChannelIsMuted(chID discord.ChannelID, checkParent bool) bool {
+func (r *State) ChannelIsMuted(chID discord.ChannelID, opts UnreadOpts) bool {
 	// If the channel is configured to be muted, then it's muted.
 	if r.MutedState.Channel(chID) {
 		return true
@@ -782,8 +797,8 @@ func (r *State) ChannelIsMuted(chID discord.ChannelID, checkParent bool) bool {
 	}
 
 	// If the channel is in a category, then check if the category is muted.
-	if c.ParentID.IsValid() && checkParent {
-		return r.ChannelIsMuted(c.ParentID, true)
+	if !opts.IncludeMutedCategories && c.ParentID.IsValid() {
+		return r.ChannelIsMuted(c.ParentID, opts)
 	}
 
 	return false
