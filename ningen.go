@@ -4,8 +4,10 @@ package ningen
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sort"
+	"time"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -766,6 +768,38 @@ func (r *State) SetStatus(status discord.Status, custom *gateway.CustomUserStatu
 
 	err := r.FastRequest("PATCH", api.EndpointMe+"/settings", httputil.WithJSONBody(patchSettings))
 	return errors.Wrap(err, "cannot update user settings API")
+}
+
+// SetAFK sets the current user's AFK status. If the user is AFK, then they will
+// be receiving push notifications. The `since` parameter is the time that the
+// user last interacted with Discord. The status is automatically set to idle.
+func (r *State) SetAFK(afk bool, since time.Time) error {
+	if afk {
+		return r.Gateway().Send(r.Context(), &gateway.UpdatePresenceCommand{
+			Status:     discord.IdleStatus,
+			Activities: []discord.Activity{},
+			Since:      discord.TimeToMilliseconds(since),
+			AFK:        true,
+		})
+	}
+
+	me, err := r.Me()
+	if err != nil {
+		return fmt.Errorf("cannot get current user information: %w", err)
+	}
+
+	// Try to restore the user's status.
+	presences, err := r.State.Presence(0, me.ID)
+	if err != nil {
+		return fmt.Errorf("cannot get presences: %w", err)
+	}
+
+	return r.Gateway().Send(r.Context(), &gateway.UpdatePresenceCommand{
+		Status:     presences.Status,
+		Activities: presences.Activities,
+		Since:      0,
+		AFK:        false,
+	})
 }
 
 // UserIsBlocked returns true if the user with the given ID is blocked by the
