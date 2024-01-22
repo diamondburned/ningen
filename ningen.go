@@ -25,6 +25,7 @@ import (
 	"github.com/diamondburned/ningen/v3/states/note"
 	"github.com/diamondburned/ningen/v3/states/read"
 	"github.com/diamondburned/ningen/v3/states/relationship"
+	"github.com/diamondburned/ningen/v3/states/summary"
 	"github.com/diamondburned/ningen/v3/states/thread"
 	"github.com/pkg/errors"
 )
@@ -90,6 +91,7 @@ type State struct {
 	EmojiState        *emoji.State
 	MemberState       *member.State
 	ThreadState       *thread.State
+	SummaryState      *summary.State
 	RelationshipState *relationship.State
 
 	initd  chan struct{} // nil after Open().
@@ -132,6 +134,7 @@ func FromState(s *state.State) *State {
 	state.EmojiState = emoji.NewState(s.Cabinet)
 	state.MemberState = member.NewState(s, prehandler)
 	state.ThreadState = thread.NewState(s, prehandler)
+	state.SummaryState = summary.NewState(s, prehandler)
 	state.RelationshipState = relationship.NewState(s.Cabinet, prehandler)
 
 	s.AddSyncHandler(func(v gateway.Event) {
