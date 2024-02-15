@@ -238,3 +238,16 @@ func (r *State) ack(chID discord.ChannelID, msgID discord.MessageID) {
 		log.Println("Discord: message ack failed:", err)
 	}
 }
+
+// TotalMentionCount returns the total mention count of all channels for the
+// current user.
+func (r *State) TotalMentionCount() int {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	var total int
+	for _, rs := range r.states {
+		total += rs.MentionCount
+	}
+	return total
+}
