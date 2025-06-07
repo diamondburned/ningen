@@ -16,21 +16,21 @@ func (b paragraph) Trigger() []byte {
 
 func (b paragraph) Open(p ast.Node, r text.Reader, pc parser.Context) (ast.Node, parser.State) {
 	_, segment := r.PeekLine()
-	if segment.IsEmpty() {
-		return nil, parser.NoChildren
-	}
-
 	node := ast.NewParagraph()
 	node.Lines().Append(segment)
 	r.Advance(segment.Len() - 1)
-
 	return node, parser.NoChildren
 }
 
 func (b paragraph) Continue(node ast.Node, r text.Reader, pc parser.Context) parser.State {
 	_, segment := r.PeekLine()
-	if segment.IsEmpty() {
-		return parser.Close
+
+	// Dirty dirty little hack, dirty dirty source code..
+	if p := node.Parent(); p != nil && p.Kind() == ast.KindListItem {
+		trimmed := segment.TrimLeftSpace(r.Source())
+		if trimmed.IsEmpty() {
+			return parser.Close
+		}
 	}
 
 	node.Lines().Append(segment)
