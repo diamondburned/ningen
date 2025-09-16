@@ -1,6 +1,7 @@
 package member
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -26,10 +27,7 @@ const (
 )
 
 func ExampleState_RequestMemberList() {
-	s, err := state.New(os.Getenv("TOKEN"))
-	if err != nil {
-		log.Fatalln("Failed to create a state:", err)
-	}
+	s := state.New(os.Getenv("TOKEN"))
 
 	// Replace with the actual ningen.FromState function.
 	n, err := ningenFromState(s)
@@ -37,10 +35,10 @@ func ExampleState_RequestMemberList() {
 		log.Fatalln("Failed to create a ningen state:", err)
 	}
 
-	updates := make(chan *gateway.GuildMemberListUpdate, 1)
+	updates := make(chan *gateway.GuildMemberListUpdateEvent, 1)
 	n.AddHandler(updates)
 
-	if err := n.Open(); err != nil {
+	if err := n.Open(context.TODO()); err != nil {
 		panic(err)
 	}
 
