@@ -102,7 +102,7 @@ type State struct {
 // identifier.
 func New(token string) *State {
 	id := gateway.DefaultIdentifier(token)
-	id.Capabilities = 253 // magic constant from reverse-engineering
+	id.Capabilities = gateway.LazyUserNotes | gateway.VersionedReadStates | gateway.VersionedUserGuildSetttings | gateway.DedupeUserObjects | gateway.PrioritizedReadyPayload | gateway.MultipleGuildExperimentPopulations | gateway.NonChannelReadStates
 	return NewWithIdentifier(id)
 }
 
